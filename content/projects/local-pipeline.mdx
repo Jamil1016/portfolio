@@ -1,0 +1,72 @@
+## The problem
+
+A third-party operational API exposed millions of rows of activity data across
+two dozen endpoints. The team needed all of it landed in Postgres every night so
+analysts could query joined, deduplicated, analytics-ready views the next
+morning. The naive approach — a serial script — took most of the night, blocked
+itself on slow endpoints, and silently truncated long date ranges.
+
+What I wanted instead: a pipeline I could run unattended for months, observe
+from a single log, and reason about when something went wrong at 2 AM.
+
+## Architecture
+
+![Diagram](/diagrams/placeholder.svg)
+
+Data flows in three layered schemas. Extractors push raw JSON into `data_raw`
+unchanged, transform steps land typed rows in `data_staging`, and an `analytics`
+schema exposes pre-joined views and materialized views for downstream consumers.
+Concurrency is a `ThreadPoolExecutor` of API workers feeding a bounded queue,
+drained by a single loader thread that runs `asyncpg` inside a background event
+loop. Per-table phases run in parallel where they are independent.
+
+## Key decisions
+
+- **Per-day chunking on the noisy endpoint:** the API silently truncated any
+  date range that produced more than ~1,000 rows. One call per day per project
+  works around it, and a dedupe by natural key absorbs boundary overlap.
+- **Write-once IDs for append tables:** older rows keep their immutable join key
+  forever, even when the source backfill rewrites identifiers.
+- **RPC-based materialized view refresh:** one MV per call, ~12–34 s each, so a
+  flaky network doesn't restart the whole 15-minute job.
+- **Retry with exponential backoff on pool creation:** transient DNS blips no
+  longer kill a run on its first call.
+
+## Metrics (production-scale, generalized)
+
+- Several million rows ingested per night across ~25 tables
+- Sub-15 s end-to-end analytics refresh after staging completes
+- 99%+ unattended run rate across months in production
+
+## Code sample
+
+```python
+# Bounded queue + loader-worker pattern. Extractors push batches; the loader
+# drains them and bulk-inserts into Postgres.
+async def extract_and_load(endpoint, dates):
+    queue: asyncio.Queue = asyncio.Queue(maxsize=8)
+
+    async def producer():
+        for d in dates:
+            rows = await api.get(endpoint, day=d)  # daily chunk
+            await queue.put(rows)
+        await queue.put(None)  # sentinel
+
+    async def loader():
+        while True:
+            batch = await queue.get()
+            if batch is None:
+                queue.task_done()
+                break
+            try:
+                await db.copy_into("data_raw.activities", batch)
+            finally:
+                queue.task_done()
+
+    await asyncio.gather(producer(), loader())
+```
+
+## Status
+
+The production version runs privately. The open-source reference implementation
+on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.

@@ -1,0 +1,73 @@
+## The problem
+
+Nightly ETL runs occasionally failed in a small number of well-understood ways:
+an upstream rate limit, a half-loaded staging table from a previous crash, a
+schema drift, or a stale credential. Each failure took roughly the same shape
+every time, but the human on-call still had to wake up, read logs, decide what
+to do, and run the fix. The recurring incidents were eating an order of
+magnitude more attention than the work itself.
+
+I wanted an agent that could handle the known-shape failures end-to-end inside
+a tight, auditable loop.
+
+## Architecture
+
+![Diagram](/diagrams/placeholder.svg)
+
+A small Python runner watches for failed runs in the pipeline-tracking table.
+When one matches a runbook signature, it assembles a structured prompt — error
+class, recent log lines, current row counts — and calls Claude with a
+constrained tool schema. The model selects one of a handful of remediation
+tools (each idempotent, each guarded by a deterministic safety check) and the
+runner executes it. Every decision and tool call is logged with inputs and
+outputs for review.
+
+## Key decisions
+
+- **Deterministic safety gates around every LLM decision:** a `truncate_orphans`
+  tool only runs if a count check actually finds orphans, never on the model's
+  word alone.
+- **Dry-run by default, apply behind a flag:** every remediation can be replayed
+  with `--apply=false` for review.
+- **A golden set of past incidents:** before any prompt change ships, it has to
+  produce the same correct action on every recorded incident in the set.
+- **Tool schemas, not free text:** the model never produces SQL, only fills in
+  the parameters of a tool the runner already knows how to execute safely.
+
+## Metrics (production-scale, generalized)
+
+- Recurring failure classes auto-remediated within five minutes
+- MTTR on the targeted incident class cut by roughly an order of magnitude
+- Zero destructive operations executed by the LLM in production (all gated)
+
+## Code sample
+
+```python
+# A constrained tool schema. The model fills slots; the runner enforces invariants.
+TOOLS = [
+    {
+        "name": "truncate_orphans",
+        "description": "Delete rows in staging whose parent run no longer exists.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "table": {"type": "string", "enum": ALLOWED_TABLES},
+                "max_rows": {"type": "integer", "maximum": 50000},
+            },
+            "required": ["table", "max_rows"],
+        },
+    },
+]
+
+def execute(tool_name, args):
+    if tool_name == "truncate_orphans":
+        count = db.count_orphans(args["table"])
+        if count == 0 or count > args["max_rows"]:
+            return {"skipped": True, "reason": "safety gate"}
+        return {"deleted": db.delete_orphans(args["table"])}
+```
+
+## Status
+
+The production version runs privately. The open-source reference implementation
+on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.

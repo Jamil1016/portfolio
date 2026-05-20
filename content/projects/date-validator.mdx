@@ -1,0 +1,66 @@
+## The problem
+
+Two source-of-truth systems disagreed about the same dates. Operational tasks
+recorded one date for a milestone; the email notification recorded another for
+the same milestone on the same entity. When they diverged — a few percent of
+the time — downstream reporting was wrong in subtle ways, and nobody was
+looking.
+
+The team needed a daily diff: which entities have a mismatch today, and what
+are the two dates?
+
+## Architecture
+
+![Diagram](/diagrams/placeholder.svg)
+
+A nightly job pulls the relevant slice from each source, normalizes both into a
+common shape, and joins them on a natural key. Rows where any date differs land
+in a diff dataset that is emitted as an Excel attachment and pushed to a Google
+Sheet for non-technical reviewers. Optionally, a ticket-creation hook can fire
+a downstream remediation. The job is idempotent: running it twice produces the
+same output.
+
+## Key decisions
+
+- **Natural keys, not surrogate IDs:** the two systems each had their own
+  surrogate IDs that didn't match. Joining on the natural identifier the humans
+  actually use (entity name + milestone type) worked where IDs didn't.
+- **Daily cadence over real-time:** mismatches are not urgent enough to justify
+  the noise of a streaming pipeline; one batch per night surfaces them with
+  near-zero false positives.
+- **Excel + Sheets, not a dashboard:** reviewers wanted to sort, filter, and
+  annotate inside the tools they already used.
+- **A normalization pass before comparing:** trimming, case-folding, and
+  collapsing whitespace removed most of the spurious mismatches the first
+  draft surfaced.
+
+## Metrics (production-scale, generalized)
+
+- Dozens of real mismatches surfaced per week
+- Near-zero false-positive rate after the normalization pass
+- Idempotent run: a second execution on the same day is a no-op
+
+## Code sample
+
+```python
+# Pseudocode diff routine: join on the natural key, emit rows where any
+# tracked date column disagrees between the two sources.
+def diff(tasks, emails):
+    by_key = defaultdict(dict)
+    for r in tasks:
+        by_key[r.natural_key]["task"] = r
+    for r in emails:
+        by_key[r.natural_key]["email"] = r
+
+    mismatches = []
+    for key, pair in by_key.items():
+        t, e = pair.get("task"), pair.get("email")
+        if t and e and any(getattr(t, c) != getattr(e, c) for c in DATE_COLS):
+            mismatches.append((key, t, e))
+    return mismatches
+```
+
+## Status
+
+The production version runs privately. The open-source reference implementation
+on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
