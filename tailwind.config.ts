@@ -58,6 +58,14 @@ const config: Config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        cream: {
+          DEFAULT: "#f5e9d3",
+          50: "#fdfaf3",
+          100: "#faf3e1",
+          200: "#f5e9d3",
+          300: "#ecd9b3",
+          400: "#dec38b",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,7 +73,9 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
+        serif: ["var(--font-serif)", "ui-serif", "Georgia"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular"],
       },
       keyframes: {
         "accordion-down": {
