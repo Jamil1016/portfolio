@@ -6,7 +6,12 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   if (code) {
     const supabase = await createServerClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      const loginUrl = new URL("/login", url.origin);
+      loginUrl.searchParams.set("error", "link_expired");
+      return NextResponse.redirect(loginUrl);
+    }
   }
   return NextResponse.redirect(`${url.origin}/dashboard`);
 }
