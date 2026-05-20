@@ -1,29 +1,19 @@
-import { BentoGrid } from "@/components/bento/BentoGrid";
-import { HeroTile } from "@/components/bento/HeroTile";
-import { MetricTile } from "@/components/bento/MetricTile";
-import { ProjectTile } from "@/components/bento/ProjectTile";
-import { NowLearningTile } from "@/components/bento/NowLearningTile";
-import { GitHubFeedTile } from "@/components/bento/GitHubFeedTile";
-import { StackTile } from "@/components/bento/StackTile";
-import { CTATile } from "@/components/bento/CTATile";
-import { projects } from "@/lib/projects";
+import { Navbar } from "@/components/v2/Navbar";
+import { Hero } from "@/components/v2/Hero";
+import { SelectedWorks } from "@/components/v2/SelectedWorks";
+import { TechnicalStack } from "@/components/v2/TechnicalStack";
+import { ExperienceLog } from "@/components/v2/ExperienceLog";
 
 export default function HomePage() {
-  const [flagship, ...rest] = projects;
   return (
-    <main>
-      <BentoGrid>
-        <HeroTile />
-        <MetricTile />
-        <ProjectTile project={flagship} span="md:col-span-6 md:row-span-1" />
-        {rest.map((p) => (
-          <ProjectTile key={p.slug} project={p} />
-        ))}
-        <NowLearningTile />
-        <GitHubFeedTile />
-        <StackTile />
-        <CTATile />
-      </BentoGrid>
-    </main>
+    <>
+      <Navbar />
+      <main>
+        <Hero />
+        <SelectedWorks />
+        <TechnicalStack />
+        <ExperienceLog />
+      </main>
+    </>
   );
 }
