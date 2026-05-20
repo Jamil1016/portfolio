@@ -3,6 +3,7 @@ import { HeroTile } from "@/components/bento/HeroTile";
 import { MetricTile } from "@/components/bento/MetricTile";
 import { ProjectTile } from "@/components/bento/ProjectTile";
 import { NowLearningTile } from "@/components/bento/NowLearningTile";
+import { GitHubFeedTile } from "@/components/bento/GitHubFeedTile";
 import { StackTile } from "@/components/bento/StackTile";
 import { CTATile } from "@/components/bento/CTATile";
 import { projects } from "@/lib/projects";
@@ -19,6 +20,7 @@ export default function HomePage() {
           <ProjectTile key={p.slug} project={p} />
         ))}
         <NowLearningTile />
+        <GitHubFeedTile />
         <StackTile />
         <CTATile />
       </BentoGrid>
