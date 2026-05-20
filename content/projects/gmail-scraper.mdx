@@ -1,0 +1,64 @@
+## The problem
+
+A lot of structured information lived inside HTML emails — status reports,
+project updates, daily summaries — and the team needed it in the warehouse the
+same day it arrived. The templates drifted constantly: new fields appeared, old
+ones disappeared, label spelling shifted with hidden tracking spans. Hard-coded
+schemas broke every other week.
+
+## Architecture
+
+![Diagram](/diagrams/placeholder.svg)
+
+A scheduled job pulls new threads from the Gmail API using a watermark on the
+internal date. BeautifulSoup parses the HTML, an ordered pattern list classifies
+the email type from its first matching header, and the body is flattened into a
+JSONB column whose keys are discovered dynamically. A Postgres unique key on
+the message id makes the whole pipeline safely re-runnable with
+`ON CONFLICT DO NOTHING`. A view deduplicates by thread for downstream
+consumers.
+
+## Key decisions
+
+- **Dynamic JSONB schema, not fixed columns:** templates change too often;
+  let the downstream view flatten what it needs.
+- **Ordered header-pattern list:** more specific labels must be matched before
+  their shorter prefixes, so a longer compound header is never lost to a
+  partial match.
+- **Strip hidden tracking spans before parsing:** zero-size spans inside labels
+  produced broken keys like `"C onstruction"`; a small regex rejoins
+  single-letter splits.
+- **Idempotent upserts on message id:** local backfills and the cloud run can
+  execute concurrently with no duplicates and no locking strategy.
+
+## Metrics (production-scale, generalized)
+
+- Thousands of emails ingested per day, sub-five-minute lag from arrival
+- Template drift handled by view changes, not parser changes
+- Months of unattended operation without manual intervention
+
+## Code sample
+
+```python
+# Ordered pattern list — the first one that matches wins, and the longer
+# compound prefixes appear first so they aren't shadowed.
+_HEADER_PATTERNS = [
+    ("LANDLORD CLOSE OUT PACKAGE", "landlord_closeout"),
+    ("CLOSE OUT PACKAGE", "closeout"),
+    ("48HR REVIEW", "review_48hr"),
+    ("REVISION", "revision"),
+    ("REVIEW", "review"),
+]
+
+def classify(html: str) -> str | None:
+    text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
+    for prefix, kind in _HEADER_PATTERNS:
+        if prefix in text:
+            return kind
+    return None
+```
+
+## Status
+
+The production version runs privately. The open-source reference implementation
+on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.

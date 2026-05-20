@@ -1,0 +1,62 @@
+## The problem
+
+Non-technical stakeholders kept asking analysts for one-off reports — same
+shape, slightly different filters, every week. The existing dashboards were too
+rigid for the long tail of questions, and writing SQL was outside the user
+base's comfort zone. I wanted a chat surface that could answer ad-hoc data
+questions safely, against the same warehouse, without ever showing the model
+real rows.
+
+## Architecture
+
+![Diagram](/diagrams/placeholder.svg)
+
+The agent runs as a FastAPI service in front of a read-only Postgres role. Each
+turn, a schema-aware prompt is assembled live from `information_schema` —
+tables, columns, types, and a curated set of column descriptions — and sent to
+Claude with a two-step contract: first produce a plan, then produce the SQL.
+A SQLGuard layer parses the statement and rejects anything outside a small
+whitelist (read-only, single statement, allowed schemas). Results render as a
+table, and Plotly produces a chart when the shape fits.
+
+## Key decisions
+
+- **The model never sees real data:** only schema and aggregates. Row-level
+  content stays on the server.
+- **Read-only at the database role, not just the application:** even a bug in
+  SQLGuard cannot mutate.
+- **Two-step plan-then-execute:** a separate planning turn lets the model think
+  about which tables and joins are relevant before committing to SQL.
+- **Allowed-schemas allowlist:** queries against system schemas, auth, or
+  storage are rejected before they reach Postgres.
+
+## Metrics (production-scale, generalized)
+
+- Typical query latency under three seconds end-to-end
+- Hundreds of analyst hours saved per quarter on routine ad-hoc requests
+- Zero data-exfiltration incidents (no real rows ever sent to the model)
+
+## Code sample
+
+```python
+# Schema-aware prompt construction. Only metadata leaves the server.
+def build_schema_prompt(allowed_schemas: list[str]) -> str:
+    rows = db.fetch("""
+        SELECT table_schema, table_name, column_name, data_type
+        FROM information_schema.columns
+        WHERE table_schema = ANY($1)
+        ORDER BY table_schema, table_name, ordinal_position
+    """, allowed_schemas)
+
+    lines = []
+    for (schema, table), cols in groupby(rows, key=lambda r: (r[0], r[1])):
+        lines.append(f"-- {schema}.{table}")
+        for _, _, name, dtype in cols:
+            lines.append(f"  {name} {dtype}")
+    return "\n".join(lines)
+```
+
+## Status
+
+The production version runs privately. The open-source reference implementation
+on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.

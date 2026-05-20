@@ -1,0 +1,61 @@
+## The problem
+
+Business stakeholders wanted a daily report in their inbox every weekday
+morning summarizing the prior day's activity, with charts. The first version
+was a brittle GitHub Actions cron job that ran on weekends, missed holidays,
+and silently failed when the runner picked the wrong timezone. I wanted
+something that actually arrived when expected, every day, and didn't show up on
+the weekend.
+
+## Architecture
+
+![Diagram](/diagrams/placeholder.svg)
+
+A Google Apps Script trigger — running inside a Google account that already
+has the right calendar context — fires a `repository_dispatch` at the GitHub
+API every weekday morning. A workflow on the receiving repo first checks an
+`is_weekend()` gate (a defense-in-depth, since the upstream trigger could
+misfire), pulls the previous day's slice from Postgres, renders charts with
+matplotlib, assembles an HTML email with inline images, and sends via SMTP.
+The whole pipeline is deterministic: running it again on the same day produces
+the same report.
+
+## Key decisions
+
+- **Apps Script triggers over GHA cron:** Apps Script timers run in the user's
+  timezone and have been more reliable than runner cron in our experience.
+- **`is_weekend()` guards every trigger surface:** the workflow, the generator,
+  and the dispatch script all check independently. Belt and suspenders.
+- **Idempotent generator:** the same input produces the same email; reruns are
+  cheap and safe.
+- **One workflow, several reports:** a single pipeline parameterized by report
+  name beats six near-identical ones.
+
+## Metrics (production-scale, generalized)
+
+- Daily delivery under ninety seconds end-to-end
+- Multi-month run streak without manual intervention
+- Zero weekend or holiday false sends since the gate was added
+
+## Code sample
+
+```python
+# The weekend gate, checked at every layer.
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+US_HOLIDAYS = {"2026-01-01", "2026-07-04", "2026-12-25"}
+
+def is_business_day(now: datetime | None = None) -> bool:
+    now = now or datetime.now(ZoneInfo("America/New_York"))
+    if now.weekday() >= 5:        # Saturday or Sunday
+        return False
+    if now.strftime("%Y-%m-%d") in US_HOLIDAYS:
+        return False
+    return True
+```
+
+## Status
+
+The production version runs privately. The open-source reference implementation
+on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
