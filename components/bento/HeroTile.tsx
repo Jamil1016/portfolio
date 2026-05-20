@@ -11,7 +11,7 @@ export function HeroTile() {
           </h1>
           <p className="mt-4 text-slate-400 max-w-md">
             I build production data systems that operate themselves. Six years across ETL,
-            analytics, and AI agents — currently shipping at ONTEL TechOps.
+            analytics, and AI agents — currently shipping at a telecom-operations team.
           </p>
         </div>
         <p className="font-mono text-xs text-slate-500">based in the Philippines · open to remote</p>
