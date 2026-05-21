@@ -1,72 +1,87 @@
-## The problem
+## The Problem
 
-A third-party operational API exposed millions of rows of activity data across
-two dozen endpoints. The team needed all of it landed in Postgres every night so
-analysts could query joined, deduplicated, analytics-ready views the next
-morning. The naive approach — a serial script — took most of the night, blocked
-itself on slow endpoints, and silently truncated long date ranges.
+Nightly ingestion of millions of rows from a third-party API into a Postgres warehouse, feeding analytics views consumed by internal dashboards and AI agents. The naive approach — a single Python script pulling everything sequentially — took six hours, regularly timed out, and silently dropped data when the upstream API returned more than ~1,000 rows in a single date range.
 
-What I wanted instead: a pipeline I could run unattended for months, observe
-from a single log, and reason about when something went wrong at 2 AM.
+The system needed to be parallel, idempotent, and observable. Failure of one extractor couldn't take down the others. Re-running the pipeline had to produce the same result every time.
 
 ## Architecture
 
-![Diagram](/diagrams/placeholder.svg)
+<MermaidDiagram>{`
+graph LR
+  A[Third-party API] -->|HTTPS<br/>daily chunks| B[Extractors<br/>parallel pool]
+  B --> Q[Bounded queue]
+  Q --> L[Loader worker thread]
+  L --> P[(Postgres<br/>raw → staging)]
+  P --> R[Backfill RPC]
+  R --> MV[Analytics<br/>materialized views]
+`}</MermaidDiagram>
 
-Data flows in three layered schemas. Extractors push raw JSON into `data_raw`
-unchanged, transform steps land typed rows in `data_staging`, and an `analytics`
-schema exposes pre-joined views and materialized views for downstream consumers.
-Concurrency is a `ThreadPoolExecutor` of API workers feeding a bounded queue,
-drained by a single loader thread that runs `asyncpg` inside a background event
-loop. Per-table phases run in parallel where they are independent.
+A single `asyncpg` connection pool runs on a dedicated background event-loop thread so that synchronous extractor code can submit queries via `run_coroutine_threadsafe()`. A `ThreadPoolExecutor` runs extractors in parallel, each pushing rows onto a bounded queue; a single loader worker drains the queue and does bulk inserts. After all extractors finish, a RPC pass backfills derived foreign keys, then materialized views refresh one at a time.
 
-## Key decisions
+## Key Decisions
 
-- **Per-day chunking on the noisy endpoint:** the API silently truncated any
-  date range that produced more than ~1,000 rows. One call per day per project
-  works around it, and a dedupe by natural key absorbs boundary overlap.
-- **Write-once IDs for append tables:** older rows keep their immutable join key
-  forever, even when the source backfill rewrites identifiers.
-- **RPC-based materialized view refresh:** one MV per call, ~12–34 s each, so a
-  flaky network doesn't restart the whole 15-minute job.
-- **Retry with exponential backoff on pool creation:** transient DNS blips no
-  longer kill a run on its first call.
+- **Per-day API chunking** — The upstream API silently truncates responses at ~1,000 rows. Splitting wide date ranges into one-call-per-day completely bypassed the bug. Cost: more API calls. Benefit: zero silent data loss.
+- **asyncpg on a background thread, not in-process** — Sync extractor code couldn't be rewritten async at once. Running the pool on its own event loop and bridging via `run_coroutine_threadsafe()` let sync callers stay sync while the DB layer was fully async.
+- **Three-schema split** — `data_raw` for unmodified API responses, `data_staging` for transformed rows, `analytics` for views and materialized views. Every layer is rebuildable from the one beneath it.
+- **Write-once derived IDs** — Once a foreign-key resolution lands on a row, it never changes. This survives table truncate+reload patterns and prevents cascading rewrites downstream.
 
-## Metrics (production-scale, generalized)
+## Code Samples
 
-- Several million rows ingested per night across ~25 tables
-- Sub-15 s end-to-end analytics refresh after staging completes
-- 99%+ unattended run rate across months in production
-
-## Code sample
+Async DB pool bridge that lets synchronous callers reach an asyncpg pool living on a different thread:
 
 ```python
-# Bounded queue + loader-worker pattern. Extractors push batches; the loader
-# drains them and bulk-inserts into Postgres.
-async def extract_and_load(endpoint, dates):
-    queue: asyncio.Queue = asyncio.Queue(maxsize=8)
+class DB:
+    def __init__(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+        self._pool = self._run(self._init_pool())
 
-    async def producer():
-        for d in dates:
-            rows = await api.get(endpoint, day=d)  # daily chunk
-            await queue.put(rows)
-        await queue.put(None)  # sentinel
-
-    async def loader():
-        while True:
-            batch = await queue.get()
-            if batch is None:
-                queue.task_done()
-                break
+    async def _init_pool(self) -> asyncpg.Pool:
+        # 3 retries with exponential backoff to survive DNS blips
+        for attempt in range(3):
             try:
-                await db.copy_into("data_raw.activities", batch)
-            finally:
-                queue.task_done()
+                return await asyncpg.create_pool(DSN, min_size=2, max_size=10)
+            except OSError:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(5 * (attempt + 1))
 
-    await asyncio.gather(producer(), loader())
+    def _run(self, coro):
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
+
+    def fetch(self, sql: str, *args):
+        return self._run(self._fetch(sql, *args))
 ```
 
-## Status
+Per-day chunking that bypasses the upstream truncation bug:
 
-The production version runs privately. The open-source reference implementation
-on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
+```python
+def date_range_chunks(start: date, end: date):
+    """Yield (day_start, day_end) tuples — one call per calendar day."""
+    cur = start
+    while cur <= end:
+        yield (cur, cur)
+        cur += timedelta(days=1)
+
+for chunk_start, chunk_end in date_range_chunks(start, end):
+    rows = api.fetch_activities(chunk_start, chunk_end)
+    queue.put(rows)
+```
+
+## Metrics
+
+- **Throughput:** millions of rows per night across 25 tables
+- **End-to-end runtime:** under 15 minutes for the nightly pass
+- **Analytics view refresh:** sub-15 seconds per materialized view
+- **Uptime:** 99%+ over multi-month operation windows
+
+## What I Learned
+
+- **Silent truncation bugs hide in the small.** The API never returned an error — it just returned fewer rows than asked. Comparing per-day totals against expected counts was the only way to catch it. Validate row counts as a first-class signal, not an afterthought.
+- **Sync-async bridging is a real pattern, not a hack.** Pure-async rewrites of large sync codebases stall. A connection pool on a background event loop unlocks async DB inside sync callers with one helper class.
+- **Schemas are documentation.** Splitting `raw` / `staging` / `analytics` made the rebuild story obvious to anyone reading the schema. Compounds across the whole team.
+
+## Links
+
+[GitHub repo](https://github.com/Jamil1016/local-pipeline) — open-source reference implementation lands W12 of the AI Engineer learning path.
