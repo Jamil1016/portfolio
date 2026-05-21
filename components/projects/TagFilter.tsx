@@ -1,32 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ALL_TAGS } from "@/lib/tags";
 import type { ProjectMeta } from "@/lib/projects";
 
+function readActiveFromHash(): string[] {
+  if (typeof window === "undefined") return [];
+  const match = window.location.hash.match(/tag=([a-z0-9,-]+)/i);
+  if (!match) return [];
+  return match[1]
+    .split(",")
+    .filter((t) => (ALL_TAGS as readonly string[]).includes(t));
+}
+
 export function TagFilter({ projects }: { projects: ProjectMeta[] }) {
-  const [active, setActive] = useState<string[]>([]);
+  // Lazy init: read URL hash synchronously during hydration so deep-linked
+  // filters don't get clobbered by a separate mount-time effect, and so the
+  // first paint already shows the filtered opacity (no flash).
+  const [active, setActive] = useState<string[]>(readActiveFromHash);
 
+  // Skip the URL-sync effect on the very first render; the URL already reflects
+  // whatever we initialized from. Only sync on subsequent user-driven changes.
+  const initialMountRef = useRef(true);
   useEffect(() => {
-    const hash = window.location.hash;
-    if (!hash) return;
-    const match = hash.match(/tag=([a-z0-9,-]+)/i);
-    if (!match) return;
-    const fromUrl = match[1]
-      .split(",")
-      .filter((t) => (ALL_TAGS as readonly string[]).includes(t));
-    if (fromUrl.length > 0) setActive(fromUrl);
-  }, []);
-
-  useEffect(() => {
-    if (active.length === 0) {
-      if (window.location.hash) {
-        history.replaceState(null, "", window.location.pathname);
-      }
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
       return;
     }
-    history.replaceState(null, "", `#tag=${active.join(",")}`);
+    if (active.length === 0) {
+      history.replaceState(null, "", window.location.pathname);
+    } else {
+      history.replaceState(null, "", `#tag=${active.join(",")}`);
+    }
   }, [active]);
 
   const toggle = useCallback((tag: string) => {
