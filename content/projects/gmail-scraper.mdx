@@ -1,64 +1,85 @@
-## The problem
+## The Problem
 
-A lot of structured information lived inside HTML emails — status reports,
-project updates, daily summaries — and the team needed it in the warehouse the
-same day it arrived. The templates drifted constantly: new fields appeared, old
-ones disappeared, label spelling shifted with hidden tracking spans. Hard-coded
-schemas broke every other week.
+A team was using Gmail as a structured data channel — status updates and milestone reports landed there as HTML emails with a consistent (but evolving) format. They needed those fields to flow into the data warehouse and onto dashboards without anyone copy-pasting.
+
+The trap: every parser written against email is one HTML template change away from breaking. The solution had to absorb format drift without code changes for new fields.
 
 ## Architecture
 
-![Diagram](/diagrams/placeholder.svg)
+<MermaidDiagram>{`
+graph LR
+  G[Gmail API] -->|incremental<br/>via historyId| F[Message fetcher]
+  F --> P[BeautifulSoup<br/>parse]
+  P --> H[Ordered header<br/>pattern match]
+  H --> J[Field extractor<br/>→ JSONB]
+  J --> U[Upsert by<br/>message_id]
+  U --> D[(Postgres<br/>JSONB column)]
+`}</MermaidDiagram>
 
-A scheduled job pulls new threads from the Gmail API using a watermark on the
-internal date. BeautifulSoup parses the HTML, an ordered pattern list classifies
-the email type from its first matching header, and the body is flattened into a
-JSONB column whose keys are discovered dynamically. A Postgres unique key on
-the message id makes the whole pipeline safely re-runnable with
-`ON CONFLICT DO NOTHING`. A view deduplicates by thread for downstream
-consumers.
+The fetcher uses Gmail's incremental sync — only messages newer than the last seen `historyId` get processed. Each message gets parsed with BeautifulSoup, hidden tracking spans are stripped, and an ordered list of header patterns identifies which message type it is (this ordering matters — substring matches need the longer pattern checked first). The parser walks key-value sections of the email, stuffing whatever it finds into a JSONB column. Duplicate suppression is at the database via `ON CONFLICT (message_id) DO NOTHING`.
 
-## Key decisions
+## Key Decisions
 
-- **Dynamic JSONB schema, not fixed columns:** templates change too often;
-  let the downstream view flatten what it needs.
-- **Ordered header-pattern list:** more specific labels must be matched before
-  their shorter prefixes, so a longer compound header is never lost to a
-  partial match.
-- **Strip hidden tracking spans before parsing:** zero-size spans inside labels
-  produced broken keys like `"C onstruction"`; a small regex rejoins
-  single-letter splits.
-- **Idempotent upserts on message id:** local backfills and the cloud run can
-  execute concurrently with no duplicates and no locking strategy.
+- **JSONB over fixed columns.** New fields appear in emails all the time. JSONB absorbs them without migrations — Excel exports auto-discover columns from the union of all keys.
+- **Ordered header pattern list.** "Landlord Close Out Package" and "Close Out Package" both exist; the longer pattern must be matched first or every landlord email gets misclassified.
+- **Hidden-span stripping with word rejoin.** Tracking pixels live inside zero-width `<span>` elements that BeautifulSoup's `get_text()` joins with spaces — breaking words like "Construction" into "C onstruction". A regex post-pass rejoins single uppercase letters back to the next word.
+- **Idempotent upserts by message_id.** Gmail's `message_id` is stable across re-runs. `ON CONFLICT DO NOTHING` makes re-processing free.
 
-## Metrics (production-scale, generalized)
+## Code Samples
 
-- Thousands of emails ingested per day, sub-five-minute lag from arrival
-- Template drift handled by view changes, not parser changes
-- Months of unattended operation without manual intervention
-
-## Code sample
+Header pattern matching with ordering to disambiguate prefixes:
 
 ```python
-# Ordered pattern list — the first one that matches wins, and the longer
-# compound prefixes appear first so they aren't shadowed.
-_HEADER_PATTERNS = [
-    ("LANDLORD CLOSE OUT PACKAGE", "landlord_closeout"),
-    ("CLOSE OUT PACKAGE", "closeout"),
-    ("48HR REVIEW", "review_48hr"),
-    ("REVISION", "revision"),
-    ("REVIEW", "review"),
+# Order matters — longer/more-specific patterns first
+HEADER_PATTERNS = [
+    ("landlord_closeout", re.compile(r"LANDLORD\s+CLOSE\s+OUT\s+PACKAGE", re.I)),
+    ("closeout",          re.compile(r"CLOSE\s+OUT\s+PACKAGE",            re.I)),
+    ("revision",          re.compile(r"REVISION\s+PACKAGE",               re.I)),
+    ("review",            re.compile(r"REVIEW\s+PACKAGE",                 re.I)),
 ]
 
-def classify(html: str) -> str | None:
-    text = " ".join(BeautifulSoup(html, "html.parser").stripped_strings)
-    for prefix, kind in _HEADER_PATTERNS:
-        if prefix in text:
+def classify(text: str) -> str | None:
+    for kind, pattern in HEADER_PATTERNS:
+        if pattern.search(text):
             return kind
     return None
 ```
 
-## Status
+Hidden-span removal that doesn't break word boundaries:
 
-The production version runs privately. The open-source reference implementation
-on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
+```python
+def clean_html(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    # Remove zero-width tracking spans entirely
+    for span in soup.find_all("span", style=re.compile(r"font-size:\s*[01]p?[tx]?")):
+        span.decompose()
+    text = soup.get_text(" ", strip=True)
+    # Rejoin single uppercase letters that BeautifulSoup split apart
+    text = re.sub(r"\b([A-Z])\s([a-z])", r"\1\2", text)
+    return text
+```
+
+Idempotent JSONB upsert — re-running is free:
+
+```sql
+insert into stg_messages (message_id, thread_id, kind, fields, received_at)
+values (%s, %s, %s, %s, %s)
+on conflict (message_id) do nothing;
+```
+
+## Metrics
+
+- **Throughput:** thousands of messages per day, near-real-time
+- **End-to-end lag:** under 5 minutes from email arrival to row in warehouse
+- **Schema drift events** absorbed without code changes — new fields appear in JSONB and Excel exports the next run
+- **Reprocessing cost:** zero — full historical re-run is idempotent
+
+## What I Learned
+
+- **Email parsers fail at the smallest scale.** Hidden tracking pixels and one-character split-spans break parsers in ways unit tests rarely catch. Visual diff against actual messages is the only way to find them.
+- **Dynamic schemas are a feature, not infrastructure.** Picking JSONB upfront let the team add fields by editing the email template, not the parser. The team owns their own data shape.
+- **Idempotent by default.** Every pipeline I'd build now starts from this constraint. Re-runnable, replayable, debug-friendly. Cost: maybe 10% more thinking up front. Benefit: months of operational ease.
+
+## Links
+
+[GitHub repo](https://github.com/Jamil1016/gmail-scraper) — open-source reference implementation lands W3 of the AI Engineer learning path.
