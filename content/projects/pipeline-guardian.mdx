@@ -1,73 +1,101 @@
-## The problem
+## The Problem
 
-Nightly ETL runs occasionally failed in a small number of well-understood ways:
-an upstream rate limit, a half-loaded staging table from a previous crash, a
-schema drift, or a stale credential. Each failure took roughly the same shape
-every time, but the human on-call still had to wake up, read logs, decide what
-to do, and run the fix. The recurring incidents were eating an order of
-magnitude more attention than the work itself.
+Nightly ETL failures left orphaned data and blocked the next run. Triage at 2 AM was unsustainable: the on-call person had to identify the failure class, find the affected rows, run a specific cleanup script, then re-trigger the failed step. Most failures were a small set of recurring patterns — exactly the kind of thing an agent should handle.
 
-I wanted an agent that could handle the known-shape failures end-to-end inside
-a tight, auditable loop.
+The system needed to act safely on production data, never destroy anything irreversibly, and prove (with replayable evals) that prompt changes didn't regress behavior.
 
 ## Architecture
 
-![Diagram](/diagrams/placeholder.svg)
+<MermaidDiagram>{`
+graph LR
+  A[ETL failure signal] --> B[Guardian<br/>orchestrator]
+  B --> C{Failure class<br/>recognized?}
+  C -->|yes| D[Claude<br/>+ runbook context]
+  D --> E[Structured<br/>tool call]
+  E --> F{Deterministic<br/>safety gate}
+  F -->|pass| G[Apply fix]
+  F -->|fail| H[Alert human]
+  C -->|no| H
+  G --> I[Verify + audit log]
+`}</MermaidDiagram>
 
-A small Python runner watches for failed runs in the pipeline-tracking table.
-When one matches a runbook signature, it assembles a structured prompt — error
-class, recent log lines, current row counts — and calls Claude with a
-constrained tool schema. The model selects one of a handful of remediation
-tools (each idempotent, each guarded by a deterministic safety check) and the
-runner executes it. Every decision and tool call is logged with inputs and
-outputs for review.
+Each failure type has a runbook entry: what it looks like, what the fix is, what to verify after. The orchestrator matches the failure to a runbook, builds a prompt with the runbook context, and gives Claude a single structured tool to call (`apply_remediation` with constrained arguments). Before the tool's effect runs against production, a deterministic guard re-checks the precondition — the LLM is allowed to *propose* the fix, but not to bypass the check.
 
-## Key decisions
+## Key Decisions
 
-- **Deterministic safety gates around every LLM decision:** a `truncate_orphans`
-  tool only runs if a count check actually finds orphans, never on the model's
-  word alone.
-- **Dry-run by default, apply behind a flag:** every remediation can be replayed
-  with `--apply=false` for review.
-- **A golden set of past incidents:** before any prompt change ships, it has to
-  produce the same correct action on every recorded incident in the set.
-- **Tool schemas, not free text:** the model never produces SQL, only fills in
-  the parameters of a tool the runner already knows how to execute safely.
+- **Structured tools, never free-form actions.** Each remediation is a fixed-signature function with typed arguments. The LLM picks one and fills in args. No SQL strings, no shell commands.
+- **Deterministic safety gate around every destructive call.** Even after the LLM picks the right tool, code re-validates the precondition before applying. The LLM is never the last check.
+- **Dry-run mode is the default.** The agent describes what it would do without doing it. Apply mode is a separate explicit flag.
+- **Golden-set evals before every prompt change.** A library of past failures with their correct remediations runs on every PR. Prompt drift gets caught before deploy.
 
-## Metrics (production-scale, generalized)
+## Code Samples
 
-- Recurring failure classes auto-remediated within five minutes
-- MTTR on the targeted incident class cut by roughly an order of magnitude
-- Zero destructive operations executed by the LLM in production (all gated)
-
-## Code sample
+Structured tool definition that constrains what the LLM can do:
 
 ```python
-# A constrained tool schema. The model fills slots; the runner enforces invariants.
-TOOLS = [
-    {
-        "name": "truncate_orphans",
-        "description": "Delete rows in staging whose parent run no longer exists.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "table": {"type": "string", "enum": ALLOWED_TABLES},
-                "max_rows": {"type": "integer", "maximum": 50000},
+APPLY_REMEDIATION = {
+    "name": "apply_remediation",
+    "description": "Apply a known remediation to a recognized failure class.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "failure_class": {
+                "type": "string",
+                "enum": ["orphaned_baseline", "stuck_lock", "stale_watermark"],
             },
-            "required": ["table", "max_rows"],
+            "affected_run_id": {"type": "string"},
+            "rationale": {"type": "string"},
         },
+        "required": ["failure_class", "affected_run_id", "rationale"],
     },
-]
-
-def execute(tool_name, args):
-    if tool_name == "truncate_orphans":
-        count = db.count_orphans(args["table"])
-        if count == 0 or count > args["max_rows"]:
-            return {"skipped": True, "reason": "safety gate"}
-        return {"deleted": db.delete_orphans(args["table"])}
+}
 ```
 
-## Status
+Deterministic guard that runs after the LLM picks its action but before the action lands:
 
-The production version runs privately. The open-source reference implementation
-on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
+```python
+def apply_with_guard(failure_class: str, run_id: str) -> str:
+    # LLM has selected a remediation — re-verify the precondition deterministically
+    rows = db.fetch_failure_signature(run_id)
+    expected = REMEDIATION_REGISTRY[failure_class].expected_signature
+    if not signature_matches(rows, expected):
+        return "BLOCKED: precondition not met; alerting human"
+    REMEDIATION_REGISTRY[failure_class].apply(run_id)
+    audit_log.write(failure_class, run_id, "APPLIED")
+    return "APPLIED"
+```
+
+Eval harness running a golden set against the current prompt before every change:
+
+```python
+def run_golden_evals(prompt: str) -> list[EvalResult]:
+    results = []
+    for case in GOLDEN_SET:  # past incidents with known correct remediations
+        decision = agent.decide(prompt, case.failure_signal)
+        results.append(
+            EvalResult(
+                case_id=case.id,
+                expected=case.expected_remediation,
+                actual=decision.failure_class,
+                passed=decision.failure_class == case.expected_remediation,
+            )
+        )
+    return results
+```
+
+## Metrics
+
+- **Recurring failure classes** auto-remediated within 5 minutes of detection
+- **MTTR** cut by an order of magnitude on the targeted incident type
+- **On-call interrupts** for the targeted class dropped from multiple per week to near-zero
+- **Eval coverage** ≥ 90% of historical incidents in the golden set
+
+## What I Learned
+
+- **Constrained tool surfaces beat free-form LLM control for safety-critical systems.** Letting the model emit SQL or shell strings is asking for production scars. Tools with typed args + deterministic guards keep the model useful and the system safe.
+- **Eval-first prompt engineering is the only way to iterate without regressing.** Every prompt change runs the golden set first. Faster than tribal knowledge, more rigorous than "looks right to me."
+- **Dry-run as the default makes adopters trust the system.** People let it loose much faster when its first move is always "here's what I'd do, want me to do it?"
+
+## Links
+
+[GitHub repo](https://github.com/Jamil1016/pipeline-guardian) — open-source reference implementation lands W8 of the AI Engineer learning path.
