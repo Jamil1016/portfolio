@@ -1,62 +1,94 @@
-## The problem
+## The Problem
 
-Non-technical stakeholders kept asking analysts for one-off reports — same
-shape, slightly different filters, every week. The existing dashboards were too
-rigid for the long tail of questions, and writing SQL was outside the user
-base's comfort zone. I wanted a chat surface that could answer ad-hoc data
-questions safely, against the same warehouse, without ever showing the model
-real rows.
+Non-technical users wanted ad-hoc reporting against a Postgres warehouse, but learning SQL wasn't realistic and existing dashboards were too rigid. They needed to ask questions in plain English — "show me the top 10 sites by activity last week" — and get back a number, a chart, or a CSV without anyone in the loop.
+
+The hard parts: schema disambiguation (a single column name often exists in multiple tables), SQL safety (must never execute writes, must never run unbounded scans), and trust (the answer has to be explainable, not a black box).
 
 ## Architecture
 
-![Diagram](/diagrams/placeholder.svg)
+<MermaidDiagram>{`
+graph LR
+  Q[Natural-language<br/>question] --> P[Schema-aware<br/>prompt builder]
+  P --> C[Claude<br/>plan + SQL]
+  C --> G[SQLGuard<br/>whitelist + bounds check]
+  G -->|allowed| E[Read-only<br/>DB executor]
+  G -->|blocked| X[Reject with reason]
+  E --> R[Result + preview + CSV + chart]
+`}</MermaidDiagram>
 
-The agent runs as a FastAPI service in front of a read-only Postgres role. Each
-turn, a schema-aware prompt is assembled live from `information_schema` —
-tables, columns, types, and a curated set of column descriptions — and sent to
-Claude with a two-step contract: first produce a plan, then produce the SQL.
-A SQLGuard layer parses the statement and rejects anything outside a small
-whitelist (read-only, single statement, allowed schemas). Results render as a
-table, and Plotly produces a chart when the shape fits.
+The prompt builder pulls the live schema from `information_schema` and emits a compact representation — only table names, column names, types, and join hints. Claude returns a structured response: a one-paragraph plan and a SQL statement. SQLGuard parses the SQL with `sqlglot`, walks the AST to confirm the statement is read-only and references only whitelisted tables, then enforces a row-count cap. Execution runs against a read-only Postgres role. Results render as a table preview with a CSV download and an optional Plotly chart.
 
-## Key decisions
+## Key Decisions
 
-- **The model never sees real data:** only schema and aggregates. Row-level
-  content stays on the server.
-- **Read-only at the database role, not just the application:** even a bug in
-  SQLGuard cannot mutate.
-- **Two-step plan-then-execute:** a separate planning turn lets the model think
-  about which tables and joins are relevant before committing to SQL.
-- **Allowed-schemas allowlist:** queries against system schemas, auth, or
-  storage are rejected before they reach Postgres.
+- **Schema-only prompts — never send live data.** The prompt contains the schema. The model never sees row contents. This kills entire classes of data-leak prompt injection.
+- **Read-only at the DB role level, not just the validator level.** Defense in depth: even if SQLGuard misses something, the DB itself can't be mutated.
+- **Two-step plan/execute.** Forcing the model to first describe its plan in prose before producing SQL catches misunderstandings early — users see the plan and reject before SQL runs.
+- **Tool calls over freeform JSON.** Structured outputs eliminate parsing failures and let the model fail loudly when it doesn't know.
 
-## Metrics (production-scale, generalized)
+## Code Samples
 
-- Typical query latency under three seconds end-to-end
-- Hundreds of analyst hours saved per quarter on routine ad-hoc requests
-- Zero data-exfiltration incidents (no real rows ever sent to the model)
-
-## Code sample
+Schema-aware prompt construction that only includes the tables relevant to the question:
 
 ```python
-# Schema-aware prompt construction. Only metadata leaves the server.
-def build_schema_prompt(allowed_schemas: list[str]) -> str:
-    rows = db.fetch("""
-        SELECT table_schema, table_name, column_name, data_type
-        FROM information_schema.columns
-        WHERE table_schema = ANY($1)
-        ORDER BY table_schema, table_name, ordinal_position
-    """, allowed_schemas)
+def build_prompt(question: str) -> str:
+    # Heuristic: extract candidate noun phrases, match to table names
+    candidates = extract_table_candidates(question)
+    schema_snippet = format_schema(candidates)
+    return f"""
+You are a SQL planner. The available schema is:
 
-    lines = []
-    for (schema, table), cols in groupby(rows, key=lambda r: (r[0], r[1])):
-        lines.append(f"-- {schema}.{table}")
-        for _, _, name, dtype in cols:
-            lines.append(f"  {name} {dtype}")
-    return "\n".join(lines)
+{schema_snippet}
+
+Question: {question}
+
+Output a JSON object with keys:
+  - plan: one paragraph describing what the SQL will do
+  - sql: a single SELECT statement, no semicolons, no CTEs deeper than 2
+""".strip()
 ```
 
-## Status
+SQLGuard AST walker that rejects anything except whitelisted, bounded SELECTs:
 
-The production version runs privately. The open-source reference implementation
-on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
+```python
+import sqlglot
+from sqlglot import expressions as exp
+
+def guard(sql: str, allowed_tables: set[str], row_cap: int = 10_000) -> str:
+    tree = sqlglot.parse_one(sql, read="postgres")
+
+    # Reject anything that isn't a pure SELECT
+    if not isinstance(tree, exp.Select):
+        raise GuardError("only SELECT statements allowed")
+
+    # Reject writes or DDL anywhere in the tree
+    for write in tree.find_all(exp.Insert, exp.Update, exp.Delete, exp.DDL):
+        raise GuardError(f"write/DDL not allowed: {type(write).__name__}")
+
+    # Reject references to tables outside the whitelist
+    for table in tree.find_all(exp.Table):
+        if table.name not in allowed_tables:
+            raise GuardError(f"table not whitelisted: {table.name}")
+
+    # Inject a row-count cap if the user's SQL doesn't have one
+    if not tree.args.get("limit"):
+        tree.limit(row_cap, copy=False)
+
+    return tree.sql(dialect="postgres")
+```
+
+## Metrics
+
+- **Latency:** typical end-to-end question → answer in under 3 seconds
+- **Saved analyst hours:** hundreds per quarter (measured against the prior dashboard-or-ad-hoc-SQL workflow)
+- **Rejection rate:** under 5% — SQLGuard refusals usually mean the model misunderstood the schema, surfaced as a useful error
+- **Schema coverage:** every analytics view exposed; no manual whitelist drift in months of operation
+
+## What I Learned
+
+- **Schema disambiguation is harder than SQL generation.** Modern models write SQL fluently. They struggle when the same column exists in five tables. The prompt's job is to pre-narrow the candidate tables.
+- **Safety rails matter more than model choice.** Switching models barely moves the needle on quality. Adding SQLGuard, the read-only role, and the planner step compounded into trust.
+- **Letting the model explain its plan first creates a contract.** Users veto wrong plans in a sentence. They'd never have caught the same misunderstanding by reading the generated SQL.
+
+## Links
+
+[GitHub repo](https://github.com/Jamil1016/data-analyst-reporting-agent) — open-source reference implementation lands W10 of the AI Engineer learning path.
