@@ -296,9 +296,8 @@ Six reference-implementation repos under `Jamil1016`, all named identically to t
 
 **Clean-room rule:** Each public repo is written on personal hardware, on personal time, against synthetic or public-API data — never copy-pasted from work. Same patterns, fresh code, your IP.
 
-**Work-side action:**
-- `jamilmendez-ontel/local-pipeline` flipped from PUBLIC → PRIVATE before W1 ships
-- `jamilmendez-ontel/gmail-scraper` flipped from PUBLIC → PRIVATE before W1 ships
+**Work-side action — REVISED 2026-05-20:**
+- `jamilmendez-ontel/local-pipeline` and `jamilmendez-ontel/gmail-scraper` **stay PUBLIC**. Original plan was to flip both to private at launch, but the work account runs multiple GitHub Actions workflows (pipeline.yml, gmail-pipeline.yml, timer-* triggers, etc.) and public repos get unlimited free Actions minutes while private repos are capped at 2,000/month on the free tier. The portfolio still points to the personal `Jamil1016/<repo>` showcases as the "open-source reference implementation"; the work-account public repos serve a different audience (anyone scrolling that GitHub profile) and are acceptable to remain visible as-is.
 
 ---
 
