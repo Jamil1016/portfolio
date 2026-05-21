@@ -7,6 +7,7 @@ export type ProjectMeta = {
   publicRepoStatus: "coming" | "live";
   publicEtaWeek?: string;
   privateRepoUrl?: string;
+  tags: string[];
 };
 
 export const projects: ProjectMeta[] = [
@@ -18,6 +19,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/local-pipeline",
     publicRepoStatus: "coming",
     publicEtaWeek: "W12",
+    tags: ["python", "async", "etl", "postgresql", "materialized-views", "incremental-sync", "automation"],
   },
   {
     slug: "pipeline-guardian",
@@ -27,6 +29,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/pipeline-guardian",
     publicRepoStatus: "coming",
     publicEtaWeek: "W8",
+    tags: ["python", "claude-api", "agent", "tool-use", "evals", "automation", "supabase"],
   },
   {
     slug: "data-analyst-reporting-agent",
@@ -36,6 +39,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/data-analyst-reporting-agent",
     publicRepoStatus: "coming",
     publicEtaWeek: "W10",
+    tags: ["python", "claude-api", "nl-sql", "agent", "prompt-engineering", "fastapi", "nextjs", "postgresql"],
   },
   {
     slug: "gmail-scraper",
@@ -45,6 +49,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/gmail-scraper",
     publicRepoStatus: "coming",
     publicEtaWeek: "W3",
+    tags: ["python", "email-parsing", "postgresql", "automation", "dedup"],
   },
   {
     slug: "date-validator",
@@ -54,6 +59,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/date-validator",
     publicRepoStatus: "coming",
     publicEtaWeek: "W11",
+    tags: ["python", "data-quality", "automation", "postgresql"],
   },
   {
     slug: "report-automation",
@@ -63,6 +69,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/report-automation",
     publicRepoStatus: "coming",
     publicEtaWeek: "W5",
+    tags: ["python", "automation", "etl", "postgresql"],
   },
 ];
 
