@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 let mermaidPromise: Promise<typeof import("mermaid")["default"]> | null = null;
 
@@ -25,16 +25,14 @@ function loadMermaid() {
   return mermaidPromise;
 }
 
-let counter = 0;
-
 export function MermaidDiagram({ children }: { children: string }) {
+  const rawId = useId();
+  const id = `mmd-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
-    counter += 1;
-    const id = `mmd-${counter}`;
     loadMermaid()
       .then((mermaid) => mermaid.render(id, children.trim()))
       .then(({ svg }) => {
@@ -46,7 +44,7 @@ export function MermaidDiagram({ children }: { children: string }) {
     return () => {
       cancelled = true;
     };
-  }, [children]);
+  }, [children, id]);
 
   if (error) {
     return (
