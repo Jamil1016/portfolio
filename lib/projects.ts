@@ -71,6 +71,16 @@ export const projects: ProjectMeta[] = [
     publicEtaWeek: "W5",
     tags: ["python", "automation", "etl", "postgresql"],
   },
+  {
+    slug: "swift-pdf-extractor",
+    name: "PDF Attachment Extractor",
+    tagline: "Parallel PDF data extraction from email attachments (76× speedup)",
+    stack: ["Python", "pdfplumber", "ProcessPoolExecutor", "Postgres"],
+    publicRepoUrl: "https://github.com/Jamil1016/swift-pdf-extractor",
+    publicRepoStatus: "coming",
+    publicEtaWeek: "W7",
+    tags: ["python", "email-parsing", "automation", "etl", "incremental-sync"],
+  },
 ];
 
 export function getProjectBySlug(slug: string): ProjectMeta | null {

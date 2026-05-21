@@ -1,0 +1,82 @@
+## The Problem
+
+A nightly job pulled PDF attachments from an inbox, extracted structured data (form values, table rows, signatures), and stored it for downstream analytics. The first version processed roughly 0.5 attachments per second on a single thread — at thousands of attachments per month, the job crept past its window and began failing on cold starts.
+
+The fix had to keep the same correctness guarantees while running fast enough to clear the backlog and keep up with new arrivals.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  G[Mail API] -->|message ids| F[Attachment fetcher<br/>ThreadPool]
+  F --> Q[(Cache: /tmp/pdfs)]
+  Q --> E[PDF extractor<br/>ProcessPool]
+  E --> P[(Postgres<br/>JSONB)]
+`}</MermaidDiagram>
+
+The bottleneck split cleanly along workload shape: API calls are IO-bound, PDF text extraction is CPU-bound. Two different pools for the two different shapes of work. A local filesystem cache between the stages lets re-runs after a parser bugfix skip the API entirely — idempotent fetch plus idempotent extract equals an idempotent pipeline.
+
+## Key Decisions
+
+- **ThreadPool for fetch, ProcessPool for extract.** IO-bound work needs concurrency; CPU-bound work needs parallelism. Using the wrong pool for either halves the speedup.
+- **Local filesystem cache between the two stages.** Re-running extraction after a parser fix doesn't re-hit the API. Cache key is the upstream message id — stable, collision-free, no invalidation logic needed.
+- **Skip OCR by default.** Most PDFs already had a text layer. OCR was the slow path — used only as the fallback when text-layer extraction returned empty.
+- **Bounded queue between stages.** Memory stays flat regardless of inbox size; the slowest stage paces the rest.
+
+## Code Samples
+
+The two-pool split that did most of the work:
+
+```python
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from os import cpu_count
+
+def extract_all(message_ids: list[str]) -> list[Result]:
+    # Stage 1: parallel IO-bound fetch
+    with ThreadPoolExecutor(max_workers=16) as io_pool:
+        cached_paths = list(io_pool.map(fetch_to_cache, message_ids))
+
+    # Stage 2: parallel CPU-bound extract
+    with ProcessPoolExecutor(max_workers=cpu_count()) as cpu_pool:
+        return list(cpu_pool.map(extract_pdf, cached_paths))
+```
+
+Idempotent fetch — the cache key is the upstream id, no API call on hits:
+
+```python
+def fetch_to_cache(message_id: str) -> Path:
+    path = CACHE_DIR / f"{message_id}.pdf"
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    raw = mail_client.get_attachment(message_id)
+    path.write_bytes(raw)
+    return path
+```
+
+Text-layer-first extraction with OCR as the fallback path:
+
+```python
+def extract_pdf(path: Path) -> Result:
+    text = pdfplumber_extract(path)
+    if text.strip():
+        return parse_fields(text)
+    # Slow path: scanned PDF, fall back to OCR
+    return parse_fields(ocr_extract(path))
+```
+
+## Metrics
+
+- **Throughput:** 0.5 → 38 attachments / second — a **76× speedup**
+- **Backlog clear:** ~2,000 attachments in under 1 minute (was 1+ hour)
+- **Memory:** flat under 500 MB regardless of inbox size (bounded queue)
+- **Cache hit rate:** ~95% on re-runs after parser updates
+
+## What I Learned
+
+- **Profile before parallelizing.** The intuition was "the whole thing is slow." The truth was "the extract step is CPU-bound and the fetch step is IO-bound, and they were sharing a single thread." Ten minutes of profiling clarified the pool choice that produced most of the speedup.
+- **Idempotent fetch is the secret of fast iteration.** Bug in the parser? Re-run, no API hits. Cache invalidation is hard in general; cache by a stable upstream id and it's free.
+- **Text-layer-first beats OCR-always.** OCR is roughly 50× slower than text-layer extraction. Tripling typical-case throughput became a one-line change once we knew which path to try first.
+
+## Links
+
+[GitHub repo](https://github.com/Jamil1016/swift-pdf-extractor) — open-source reference implementation lands W7 of the AI Engineer learning path.

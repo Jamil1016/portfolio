@@ -4,7 +4,7 @@ import { isValidTag } from "@/lib/tags";
 
 describe("projects metadata", () => {
   it("exposes exactly six projects", () => {
-    expect(projects).toHaveLength(6);
+    expect(projects).toHaveLength(7);
   });
 
   it("each project has required fields", () => {
