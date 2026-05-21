@@ -1,5 +1,6 @@
 import type { ProjectMeta } from "@/lib/projects";
 import Link from "next/link";
+import { TagPills } from "./TagPills";
 
 export function CaseStudyLayout({
   project,
@@ -33,6 +34,9 @@ export function CaseStudyLayout({
             Open-source reference implementation coming {project.publicEtaWeek}
           </p>
         )}
+        <div className="mt-4">
+          <TagPills tags={project.tags} />
+        </div>
       </header>
       <div className="prose prose-invert prose-slate mt-8 max-w-none">
         {children}
