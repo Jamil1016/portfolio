@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { projects } from "@/lib/projects";
+import { TagFilter } from "@/components/projects/TagFilter";
 
 export const metadata = { title: "Projects — Jamil Mendez" };
 
@@ -10,24 +11,9 @@ export default function ProjectsIndex() {
         ← back
       </Link>
       <h1 className="mt-6 text-3xl font-semibold text-slate-50">Projects</h1>
-      <div className="mt-8 space-y-4">
-        {projects.map((p) => (
-          <Link
-            key={p.slug}
-            href={`/projects/${p.slug}`}
-            className="block rounded-xl border border-slate-800 p-5 hover:border-slate-700"
-          >
-            <div className="flex items-baseline justify-between gap-4">
-              <h2 className="text-lg font-medium text-slate-50">{p.name}</h2>
-              {p.publicRepoStatus === "coming" && (
-                <span className="font-mono text-xs text-slate-500">
-                  OSS · {p.publicEtaWeek}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-slate-400">{p.tagline}</p>
-          </Link>
-        ))}
+      <p className="mt-2 text-slate-400">Engineering systems that operate themselves.</p>
+      <div className="mt-10">
+        <TagFilter projects={projects} />
       </div>
     </main>
   );

@@ -1,66 +1,93 @@
-## The problem
+## The Problem
 
-Two source-of-truth systems disagreed about the same dates. Operational tasks
-recorded one date for a milestone; the email notification recorded another for
-the same milestone on the same entity. When they diverged — a few percent of
-the time — downstream reporting was wrong in subtle ways, and nobody was
-looking.
+Two systems were the authoritative source for "when did task X happen" — one was the operational platform, the other was an email-driven status workflow. They drifted constantly. Operators were finding the mismatches days or weeks later, by which point the upstream context was lost.
 
-The team needed a daily diff: which entities have a mismatch today, and what
-are the two dates?
+The fix had to be cheap to run nightly, surface only real mismatches (false positives kill adoption), and produce a diff humans could act on without a database query.
 
 ## Architecture
 
-![Diagram](/diagrams/placeholder.svg)
+<MermaidDiagram>{`
+graph LR
+  A[(Source A:<br/>task dates)] --> N[Natural-key<br/>normalizer]
+  B[(Source B:<br/>email dates)] --> N
+  N --> J[Inner join +<br/>diff]
+  J --> O[Excel report]
+  O --> S[Google Sheets<br/>upload]
+  S --> E[Email to<br/>operators]
+`}</MermaidDiagram>
 
-A nightly job pulls the relevant slice from each source, normalizes both into a
-common shape, and joins them on a natural key. Rows where any date differs land
-in a diff dataset that is emitted as an Excel attachment and pushed to a Google
-Sheet for non-technical reviewers. Optionally, a ticket-creation hook can fire
-a downstream remediation. The job is idempotent: running it twice produces the
-same output.
+Both sources are pulled fresh every night. The natural-key normalizer handles the messy real-world variants — whitespace inside values, two-digit years, placeholder strings like "--/--/----". After normalization, an inner join surfaces only rows that exist in both sources and have different dates. The diff lands in an Excel file, gets uploaded to a shared Google Sheet for visibility, and an email summary goes to the operators who can act.
 
-## Key decisions
+## Key Decisions
 
-- **Natural keys, not surrogate IDs:** the two systems each had their own
-  surrogate IDs that didn't match. Joining on the natural identifier the humans
-  actually use (entity name + milestone type) worked where IDs didn't.
-- **Daily cadence over real-time:** mismatches are not urgent enough to justify
-  the noise of a streaming pipeline; one batch per night surfaces them with
-  near-zero false positives.
-- **Excel + Sheets, not a dashboard:** reviewers wanted to sort, filter, and
-  annotate inside the tools they already used.
-- **A normalization pass before comparing:** trimming, case-folding, and
-  collapsing whitespace removed most of the spurious mismatches the first
-  draft surfaced.
+- **Natural keys over surrogate IDs.** The two systems assigned different surrogate IDs to the same real-world entity. Joining on the surrogates produced empty results. Joining on (normalized) natural keys produced the actual diff.
+- **Daily cadence, not real-time.** Real-time alerting on every divergence drowned the operators in noise. A once-a-day batch let them triage the day's drift in one sitting.
+- **Normalization as a first-class step, not a side-effect of the SQL.** The normalizer is a tested function. Adding new edge cases (e.g. a new placeholder string) extends the function, not the join condition.
+- **Idempotent Sheets upload.** The same sheet gets rewritten each night, not appended. Last run is always current state.
 
-## Metrics (production-scale, generalized)
+## Code Samples
 
-- Dozens of real mismatches surfaced per week
-- Near-zero false-positive rate after the normalization pass
-- Idempotent run: a second execution on the same day is a no-op
-
-## Code sample
+Natural-key normalization that handles the date-string nightmares observed in production:
 
 ```python
-# Pseudocode diff routine: join on the natural key, emit rows where any
-# tracked date column disagrees between the two sources.
-def diff(tasks, emails):
-    by_key = defaultdict(dict)
-    for r in tasks:
-        by_key[r.natural_key]["task"] = r
-    for r in emails:
-        by_key[r.natural_key]["email"] = r
+PLACEHOLDER_PATTERNS = [
+    re.compile(r"^[-/]+$"),       # "--/--/----"
+    re.compile(r"^\s*N/?A\s*$", re.I),
+    re.compile(r"^pending", re.I),
+]
 
-    mismatches = []
-    for key, pair in by_key.items():
-        t, e = pair.get("task"), pair.get("email")
-        if t and e and any(getattr(t, c) != getattr(e, c) for c in DATE_COLS):
-            mismatches.append((key, t, e))
-    return mismatches
+def normalize_date(raw: str | None) -> date | None:
+    if raw is None or not raw.strip():
+        return None
+    s = raw.strip()
+    for p in PLACEHOLDER_PATTERNS:
+        if p.match(s):
+            return None
+    # Strip embedded spaces inside the value: "02-1 9 -2026" -> "02-19-2026"
+    s = re.sub(r"(?<=\d)\s+(?=\d)", "", s)
+    for fmt in ("%m-%d-%Y", "%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
 ```
 
-## Status
+The diff routine — deterministic and idempotent:
 
-The production version runs privately. The open-source reference implementation
-on synthetic data lands on the GitHub repo (link at top of page) on the ETA shown.
+```python
+def diff_sources(a: list[Row], b: list[Row]) -> list[Diff]:
+    by_key = {r.key: r for r in a}
+    diffs: list[Diff] = []
+    for rb in b:
+        ra = by_key.get(rb.key)
+        if ra is None:
+            continue  # only-in-B is handled by a separate report
+        if ra.date != rb.date:
+            diffs.append(
+                Diff(
+                    key=rb.key,
+                    source_a=ra.date,
+                    source_b=rb.date,
+                    gap_days=(rb.date - ra.date).days if ra.date and rb.date else None,
+                )
+            )
+    return sorted(diffs, key=lambda d: (d.gap_days or 0, d.key), reverse=True)
+```
+
+## Metrics
+
+- **Mismatches surfaced:** dozens per week, sorted by gap-days descending
+- **False-positive rate:** under 5% once the normalizer covered the recurring placeholders
+- **Operator triage time:** minutes per day vs. hours previously spent hunting drift
+- **Run cost:** under 30 seconds nightly, idempotent re-runs
+
+## What I Learned
+
+- **Data quality bugs live in the join key.** Engineers reach for "the SQL is wrong" first. Almost always the SQL is fine and the inputs are unnormalized.
+- **Normalization deserves a tested function, not inline transforms.** Once it's a function with cases pinned by tests, adding new edge cases is a one-line change with regression protection.
+- **Idempotent reports are easier to trust.** Operators can re-run when they want fresher numbers without worrying about double-counts.
+
+## Links
+
+[GitHub repo](https://github.com/Jamil1016/date-validator) — open-source reference implementation lands W11 of the AI Engineer learning path.

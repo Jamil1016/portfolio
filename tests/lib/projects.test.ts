@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { projects, getProjectBySlug } from "@/lib/projects";
+import { isValidTag } from "@/lib/tags";
 
 describe("projects metadata", () => {
   it("exposes exactly six projects", () => {
@@ -23,5 +24,23 @@ describe("projects metadata", () => {
 
   it("getProjectBySlug returns null for unknown slug", () => {
     expect(getProjectBySlug("not-real")).toBeNull();
+  });
+
+  it("every project has a tags array with 4-8 valid tags", () => {
+    for (const p of projects) {
+      expect(p.tags).toBeDefined();
+      expect(Array.isArray(p.tags)).toBe(true);
+      expect(p.tags.length).toBeGreaterThanOrEqual(4);
+      expect(p.tags.length).toBeLessThanOrEqual(8);
+      for (const tag of p.tags) {
+        expect(isValidTag(tag)).toBe(true);
+      }
+    }
+  });
+
+  it("no project has duplicate tags", () => {
+    for (const p of projects) {
+      expect(new Set(p.tags).size).toBe(p.tags.length);
+    }
   });
 });
