@@ -47,8 +47,7 @@ export const projects: ProjectMeta[] = [
     tagline: "HTML email → JSONB with dynamic field discovery",
     stack: ["Python", "Gmail API", "Postgres"],
     publicRepoUrl: "https://github.com/Jamil1016/gmail-scraper",
-    publicRepoStatus: "coming",
-    publicEtaWeek: "W3",
+    publicRepoStatus: "live",
     tags: ["python", "email-parsing", "postgresql", "automation", "dedup"],
   },
   {
