@@ -20,6 +20,7 @@ The prompt builder pulls the live schema from `information_schema` and emits a c
 
 ## Key Decisions
 
+- **Security: zero PII to the model, read-only at the database role, SQL validated by AST walk.** Three independent layers — schema-only prompt construction means no row data ever crosses the model boundary; the database role can't write even if everything else fails; SQLGuard's `sqlglot` AST walk rejects anything that isn't a whitelisted bounded SELECT. Each layer is independent of the others, and defense in depth.
 - **Schema-only prompts — never send live data.** The prompt contains the schema. The model never sees row contents. This kills entire classes of data-leak prompt injection.
 - **Read-only at the DB role level, not just the validator level.** Defense in depth: even if SQLGuard misses something, the DB itself can't be mutated.
 - **Two-step plan/execute.** Forcing the model to first describe its plan in prose before producing SQL catches misunderstandings early — users see the plan and reject before SQL runs.

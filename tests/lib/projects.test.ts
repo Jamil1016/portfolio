@@ -26,12 +26,12 @@ describe("projects metadata", () => {
     expect(getProjectBySlug("not-real")).toBeNull();
   });
 
-  it("every project has a tags array with 4-8 valid tags", () => {
+  it("every project has a tags array with 4-10 valid tags", () => {
     for (const p of projects) {
       expect(p.tags).toBeDefined();
       expect(Array.isArray(p.tags)).toBe(true);
       expect(p.tags.length).toBeGreaterThanOrEqual(4);
-      expect(p.tags.length).toBeLessThanOrEqual(8);
+      expect(p.tags.length).toBeLessThanOrEqual(10);
       for (const tag of p.tags) {
         expect(isValidTag(tag)).toBe(true);
       }

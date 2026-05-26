@@ -25,6 +25,9 @@ export const ALL_TAGS = [
   "email-parsing",
   "data-quality",
   "automation",
+  // security (2)
+  "security",
+  "ai-safety",
 ] as const;
 
 export type Tag = (typeof ALL_TAGS)[number];

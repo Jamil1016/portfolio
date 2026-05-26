@@ -29,7 +29,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/pipeline-guardian",
     publicRepoStatus: "coming",
     publicEtaWeek: "W8",
-    tags: ["python", "claude-api", "agent", "tool-use", "evals", "automation", "supabase"],
+    tags: ["python", "claude-api", "agent", "tool-use", "evals", "automation", "supabase", "security", "ai-safety"],
   },
   {
     slug: "data-analyst-reporting-agent",
@@ -39,7 +39,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/data-analyst-reporting-agent",
     publicRepoStatus: "coming",
     publicEtaWeek: "W10",
-    tags: ["python", "claude-api", "nl-sql", "agent", "prompt-engineering", "fastapi", "nextjs", "postgresql"],
+    tags: ["python", "claude-api", "nl-sql", "agent", "prompt-engineering", "fastapi", "nextjs", "postgresql", "security", "ai-safety"],
   },
   {
     slug: "gmail-scraper",
@@ -58,7 +58,7 @@ export const projects: ProjectMeta[] = [
     publicRepoUrl: "https://github.com/Jamil1016/date-validator",
     publicRepoStatus: "coming",
     publicEtaWeek: "W11",
-    tags: ["python", "data-quality", "automation", "postgresql"],
+    tags: ["python", "data-quality", "automation", "postgresql", "security"],
   },
   {
     slug: "report-automation",
