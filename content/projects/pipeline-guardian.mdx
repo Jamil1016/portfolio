@@ -23,6 +23,7 @@ Each failure type has a runbook entry: what it looks like, what the fix is, what
 
 ## Key Decisions
 
+- **Security: the minimal tool surface is the whole security posture.** Constraining the LLM to a fixed set of typed function calls eliminates entire attack classes upstream — no SQL string injection, no shell escape, no arbitrary action surface. The deterministic precondition guard then ensures the LLM is never the final authority on a destructive operation.
 - **Structured tools, never free-form actions.** Each remediation is a fixed-signature function with typed arguments. The LLM picks one and fills in args. No SQL strings, no shell commands.
 - **Deterministic safety gate around every destructive call.** Even after the LLM picks the right tool, code re-validates the precondition before applying. The LLM is never the last check.
 - **Dry-run mode is the default.** The agent describes what it would do without doing it. Apply mode is a separate explicit flag.

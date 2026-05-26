@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { ALL_TAGS, isValidTag } from "@/lib/tags";
 
 describe("ALL_TAGS", () => {
-  it("contains exactly 22 tags", () => {
-    expect(ALL_TAGS).toHaveLength(22);
+  it("contains exactly 24 tags", () => {
+    expect(ALL_TAGS).toHaveLength(24);
   });
 
   it("has no duplicates", () => {
@@ -22,6 +22,8 @@ describe("ALL_TAGS", () => {
     expect(ALL_TAGS).toContain("async");
     expect(ALL_TAGS).toContain("rag");
     expect(ALL_TAGS).toContain("automation");
+    expect(ALL_TAGS).toContain("security");
+    expect(ALL_TAGS).toContain("ai-safety");
   });
 });
 
