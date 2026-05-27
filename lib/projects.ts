@@ -66,8 +66,7 @@ export const projects: ProjectMeta[] = [
     tagline: "Automated daily finance report pipeline",
     stack: ["Python", "Supabase", "Chart.js", "GitHub Actions"],
     publicRepoUrl: "https://github.com/Jamil1016/report-automation",
-    publicRepoStatus: "coming",
-    publicEtaWeek: "W5",
+    publicRepoStatus: "live",
     tags: ["python", "automation", "etl", "postgresql"],
   },
   {
