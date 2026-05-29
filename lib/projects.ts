@@ -27,8 +27,7 @@ export const projects: ProjectMeta[] = [
     tagline: "Auto-remediation agent for ETL failures",
     stack: ["Python", "Claude API", "Supabase"],
     publicRepoUrl: "https://github.com/Jamil1016/pipeline-guardian",
-    publicRepoStatus: "coming",
-    publicEtaWeek: "W8",
+    publicRepoStatus: "live",
     tags: ["python", "claude-api", "agent", "tool-use", "evals", "automation", "supabase", "security", "ai-safety"],
   },
   {
