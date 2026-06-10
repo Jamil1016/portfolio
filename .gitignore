@@ -44,3 +44,6 @@ supabase/.temp
 .vscode/
 .idea/
 Thumbs.db
+
+# local design working material (screenshots, mockups)
+/reference
