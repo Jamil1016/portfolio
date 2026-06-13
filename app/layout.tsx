@@ -23,9 +23,19 @@ export const metadata: Metadata = {
   },
 };
 
+// Applied before paint so the chosen theme never flashes. Defaults to "cream".
+const themeInit = `(function(){try{var t=localStorage.getItem('theme');if(!t||['cream','dark','colorful'].indexOf(t)===-1)t='cream';document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('motion')==='off')document.documentElement.setAttribute('data-motion','off');}catch(e){document.documentElement.setAttribute('data-theme','cream');}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable} ${serif.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${mono.variable} ${serif.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
         {children}
         <Analytics />
