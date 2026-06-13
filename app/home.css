@@ -85,16 +85,17 @@ html { scroll-padding-top: 73px; }
 
 .home-shell .wrap { width: 100%; max-width: 1920px; margin: 0 auto; padding: 0 clamp(28px, 4vw, 72px); }
 
-/* ---------- tab view: one segment visible at a time ----------
-   Each nav tab isolates its own segment (incl. Home = hero + stats + ticker).
+/* ---------- tab view ----------
+   Home = the full single-page scroll (every segment, like the old site).
+   Work / Stack / Training / About isolate just that one segment.
    Sections carry data-tab (home / work / stack / training / about). */
 .home-shell[data-active] main > [data-tab] { display: none; }
-.home-shell[data-active="home"] main > [data-tab="home"],
 .home-shell[data-active="work"] main > [data-tab="work"],
 .home-shell[data-active="stack"] main > [data-tab="stack"],
 .home-shell[data-active="training"] main > [data-tab="training"],
 .home-shell[data-active="about"] main > [data-tab="about"] { display: block; }
-/* No-JS / no-attribute fallback: show everything as a scroll. */
+/* Home (and the no-JS / no-attribute fallback) shows everything as a scroll. */
+.home-shell[data-active="home"] main > [data-tab],
 .home-shell:not([data-active]) main > [data-tab] { display: block; }
 
 .home-shell .eyebrow {
@@ -152,7 +153,9 @@ html { scroll-padding-top: 73px; }
 .home-shell .theme-toggle button.on { background: var(--btn-bg); color: var(--btn-fg); }
 
 /* ---------- hero ---------- */
-.home-shell .hero { border-bottom: 1px solid var(--rule); }
+/* Fill the first viewport so the next section sits below the fold (no peek)
+   when Home is the full scroll. Header (sticky) + stats band + ticker ≈ 242px. */
+.home-shell .hero { border-bottom: 1px solid var(--rule); min-height: calc(100vh - 242px); }
 .home-shell .hero-grid { display: grid; grid-template-columns: 1fr 500px; align-items: stretch; }
 .home-shell .hero-left { padding: 48px 64px 48px 0; border-right: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: center; }
 .home-shell .hero-left h1 {
