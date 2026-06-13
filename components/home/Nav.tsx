@@ -24,7 +24,7 @@ export function Nav() {
             About
           </a>
           <ThemeToggle />
-          <a className="btn" href="#contact">
+          <a className="btn" href="#contact" data-tablink="about">
             Get in touch
           </a>
         </nav>

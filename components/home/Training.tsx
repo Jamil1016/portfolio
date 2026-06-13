@@ -27,7 +27,7 @@ export async function Training() {
   const logWeeks = snap.weeks.filter((w) => w.phase !== "Capstone");
 
   return (
-    <section className="band" id="training" data-screen-label="Training">
+    <section className="band" id="training" data-tab="training" data-screen-label="Training">
       <div className="wrap">
         <div className="sec-head" style={{ marginBottom: 28 }}>
           <div className="eyebrow">Training · in public</div>

@@ -2,7 +2,7 @@ import { STACK } from "@/lib/site-data";
 
 export function Stack() {
   return (
-    <section className="band" id="stack" data-screen-label="Technical stack">
+    <section className="band" id="stack" data-tab="stack" data-screen-label="Technical stack">
       <div className="wrap">
         <div className="sec-head">
           <div className="eyebrow">Technical stack</div>

@@ -23,7 +23,7 @@ export function Work() {
   const [featured, second, third, ...rest] = projects;
 
   return (
-    <section className="band" id="work" data-screen-label="Selected works">
+    <section className="band" id="work" data-tab="work" data-screen-label="Selected works">
       <div className="wrap">
         <div className="sec-head">
           <div className="eyebrow">Selected works · {projects.length} systems</div>
