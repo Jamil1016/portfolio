@@ -85,18 +85,12 @@ html { scroll-padding-top: 73px; }
 
 .home-shell .wrap { width: 100%; max-width: 1920px; margin: 0 auto; padding: 0 clamp(28px, 4vw, 72px); }
 
-/* ---------- tab view ----------
-   Home = the full single-page scroll (every segment, like the old site).
-   Work / Stack / Training / About isolate just that one segment.
-   Sections carry data-tab (home / work / stack / training / about). */
-.home-shell[data-active] main > [data-tab] { display: none; }
-.home-shell[data-active="work"] main > [data-tab="work"],
-.home-shell[data-active="stack"] main > [data-tab="stack"],
-.home-shell[data-active="training"] main > [data-tab="training"],
-.home-shell[data-active="about"] main > [data-tab="about"] { display: block; }
-/* Home (and the no-JS / no-attribute fallback) shows everything as a scroll. */
-.home-shell[data-active="home"] main > [data-tab],
-.home-shell:not([data-active]) main > [data-tab] { display: block; }
+/* ---------- single-page scroll ----------
+   All sections live on the one page; the nav links smooth-scroll to them.
+   sections carry an id (hero / work / stack / training / experience / contact)
+   and scroll-margin-top to clear the sticky header. */
+.home-shell main > section,
+.home-shell main > .ticker { scroll-margin-top: 80px; }
 
 .home-shell .eyebrow {
   font-family: var(--font-mono), monospace;
