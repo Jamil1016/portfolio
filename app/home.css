@@ -316,6 +316,18 @@ html { scroll-padding-top: 73px; }
 .home-shell .s2p-card .shipped { font-family: var(--font-serif), serif; font-size: 23px; color: var(--strong); line-height: 1.15; }
 .home-shell .s2p-card .shipped small { display: block; font-family: var(--font-sans), sans-serif; font-size: 13.5px; color: var(--dim); margin-top: 7px; line-height: 1.5; }
 
+/* ---------- subpage intro (resume / about) ---------- */
+.home-shell .page-intro { padding: 56px 0 44px; border-bottom: 1px solid var(--rule); }
+.home-shell .page-intro h1 {
+  font-family: var(--font-serif), serif; font-weight: 400;
+  font-size: clamp(44px, 5vw, 72px); line-height: 1; letter-spacing: -0.01em;
+  margin: 20px 0 14px; color: var(--strong);
+}
+.home-shell .page-intro .sub { max-width: 560px; font-size: 16.5px; line-height: 1.6; color: var(--dim); margin: 0 0 22px; }
+.home-shell .contact-line { font-family: var(--font-mono), monospace; font-size: 12.5px; letter-spacing: 0.08em; color: var(--faint); display: flex; flex-wrap: wrap; gap: 10px 20px; }
+.home-shell .contact-line a { color: var(--strong); text-decoration: none; }
+.home-shell .contact-line a:hover { text-decoration: underline; text-underline-offset: 4px; }
+
 /* ---------- contact + footer ---------- */
 .home-shell .contact { padding: 110px 0; text-align: center; border-bottom: 1px solid var(--rule); }
 .home-shell .contact h2 { font-family: var(--font-serif), serif; font-weight: 400; font-size: clamp(56px, 6vw, 88px); line-height: 1; margin: 22px 0 26px; color: var(--strong); }
