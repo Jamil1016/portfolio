@@ -85,17 +85,16 @@ html { scroll-padding-top: 73px; }
 
 .home-shell .wrap { width: 100%; max-width: 1920px; margin: 0 auto; padding: 0 clamp(28px, 4vw, 72px); }
 
-/* ---------- tab view ----------
-   Home = the full single-page scroll (every segment visible). Clicking any
-   other tab isolates just that segment. Sections carry data-tab
-   (home / work / stack / training / about). */
+/* ---------- tab view: one segment visible at a time ----------
+   Each nav tab isolates its own segment (incl. Home = hero + stats + ticker).
+   Sections carry data-tab (home / work / stack / training / about). */
 .home-shell[data-active] main > [data-tab] { display: none; }
+.home-shell[data-active="home"] main > [data-tab="home"],
 .home-shell[data-active="work"] main > [data-tab="work"],
 .home-shell[data-active="stack"] main > [data-tab="stack"],
 .home-shell[data-active="training"] main > [data-tab="training"],
 .home-shell[data-active="about"] main > [data-tab="about"] { display: block; }
-/* Home (and the no-JS / no-attribute fallback) shows everything as a scroll. */
-.home-shell[data-active="home"] main > [data-tab],
+/* No-JS / no-attribute fallback: show everything as a scroll. */
 .home-shell:not([data-active]) main > [data-tab] { display: block; }
 
 .home-shell .eyebrow {
