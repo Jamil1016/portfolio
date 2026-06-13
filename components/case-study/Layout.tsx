@@ -15,7 +15,7 @@ export function CaseStudyLayout({
       <SiteHeader />
       <main>
         <section className="cs-head">
-          <div className="wrap">
+          <div className="cs-wrap">
             <div className="eyebrow">
               Case study ·{" "}
               {project.publicRepoStatus === "live" ? "Live" : `OSS · ${project.publicEtaWeek}`}
@@ -36,7 +36,7 @@ export function CaseStudyLayout({
           </div>
         </section>
 
-        <article className="wrap">
+        <article className="cs-wrap">
           <div className="cs-prose">{children}</div>
         </article>
       </main>
