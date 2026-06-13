@@ -1,9 +1,117 @@
 import "../home.css";
 import { ThemeToggle } from "@/components/home/ThemeToggle";
-import { projects } from "@/lib/projects";
-import { EXPERIENCE, STACK, GITHUB_URL, CONTACT_EMAIL } from "@/lib/site-data";
+import { GITHUB_URL, CONTACT_EMAIL } from "@/lib/site-data";
 
 export const metadata = { title: "Resume — Jamil Mendez" };
+
+const PRINCIPLES = [
+  {
+    n: "01",
+    title: "Systems that operate themselves",
+    body: "I'd rather spend a week making a pipeline self-healing than answer the same 2 AM page twice. Auto-remediation, retries with backoff, and runbook-aware agents beat heroics.",
+  },
+  {
+    n: "02",
+    title: "Validate counts as a first-class signal",
+    body: "The worst bugs don't error — they silently return fewer rows. I treat row-count reconciliation and data-quality checks as core features, not afterthoughts.",
+  },
+  {
+    n: "03",
+    title: "Only count it learned once it ships",
+    body: "I keep a structured roadmap, but a course isn't done until the idea lands in a production system — evals, safety rails, and observability included.",
+  },
+];
+
+const HIGHLIGHTS = [
+  {
+    metric: "6h → <15m",
+    text: (
+      <>
+        Rewrote a six-hour, single-threaded nightly job that timed out and dropped
+        data into a <strong>parallel, idempotent ETL platform</strong> that finishes the
+        full pass in under 15 minutes.
+      </>
+    ),
+  },
+  {
+    metric: "6.2M+ / night",
+    text: (
+      <>
+        Operate ingestion of <strong>6.2M+ rows a night across 25 production tables</strong>{" "}
+        on Postgres at <strong>99%+ uptime</strong> over multi-month windows.
+      </>
+    ),
+  },
+  {
+    metric: "76×",
+    text: (
+      <>
+        Cut PDF data-extraction time <strong>76×</strong> by parallelizing parsing across
+        email attachments with a process pool.
+      </>
+    ),
+  },
+  {
+    metric: "0 silent loss",
+    text: (
+      <>
+        Eliminated silent upstream data loss by chunking a truncating API to one call
+        per day and validating per-day row counts as a hard signal.
+      </>
+    ),
+  },
+  {
+    metric: "2 agents",
+    text: (
+      <>
+        Shipped <strong>Pipeline Guardian</strong> (auto-remediates failed nightly runs)
+        and <strong>DARA</strong> (schema-aware NL→SQL with safety rails and a 48-case eval
+        suite).
+      </>
+    ),
+  },
+];
+
+const DECISIONS = [
+  {
+    t: "Per-day API chunking",
+    d: (
+      <>
+        The upstream API silently truncated wide date ranges at ~1,000 rows. One call
+        per calendar day bypassed it entirely — <em>zero silent data loss</em> at the cost
+        of more requests.
+      </>
+    ),
+  },
+  {
+    t: "asyncpg on a background thread",
+    d: (
+      <>
+        A pure-async rewrite of the sync codebase would have stalled. Running the
+        connection pool on its own event loop and bridging via{" "}
+        <code>run_coroutine_threadsafe()</code> let sync callers reach an async DB layer.
+      </>
+    ),
+  },
+  {
+    t: "Three-schema split",
+    d: (
+      <>
+        <code>raw → staging → analytics</code>, each layer rebuildable from the one
+        beneath it. The schema <em>is</em> the documentation.
+      </>
+    ),
+  },
+  {
+    t: "Write-once derived IDs",
+    d: (
+      <>
+        Once a foreign-key resolution lands on a row it never changes — surviving
+        truncate-and-reload without cascading rewrites downstream.
+      </>
+    ),
+  },
+];
 
 export default function Resume() {
   return (
@@ -30,11 +138,11 @@ export default function Resume() {
         <section className="page-intro">
           <div className="wrap">
             <div className="eyebrow">Resume · Data + AI Engineer</div>
-            <h1>Jamil Mendez</h1>
+            <h1>The short version.</h1>
             <p className="sub">
-              Data + AI Engineer building and operating production data platforms and
-              LLM agents at telecom-operations scale — 6.2M+ rows a night across 25
-              tables, with agents that keep the pipelines healthy.
+              The home page has the metrics and the project grid. This is how I think,
+              the wins I&rsquo;m proudest of, and a look under the hood of the flagship
+              system — the parts a résumé bullet can&rsquo;t hold.
             </p>
             <div className="contact-line">
               <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
@@ -46,73 +154,69 @@ export default function Resume() {
           </div>
         </section>
 
+        {/* How I work */}
         <section className="band">
           <div className="wrap">
             <div className="sec-head">
-              <div className="eyebrow">Experience</div>
-              <h2>Where I&rsquo;ve run things.</h2>
+              <div className="eyebrow">How I work</div>
+              <h2>Three things I optimize for.</h2>
             </div>
-            <div className="xp">
-              {EXPERIENCE.map((e) => (
-                <div className="xp-row" key={e.when}>
-                  <div className="when">
-                    {e.current && <span className="mini-dot dot" />}
-                    {e.when}
-                  </div>
-                  <div>
-                    <div className="role">{e.role}</div>
-                    <p className="what">{e.what}</p>
-                  </div>
+            <div className="principles">
+              {PRINCIPLES.map((p) => (
+                <div className="principle" key={p.n}>
+                  <div className="pn">{p.n}</div>
+                  <h3>{p.title}</h3>
+                  <p>{p.body}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
+        {/* Career highlights */}
         <section className="band">
           <div className="wrap">
             <div className="sec-head">
-              <div className="eyebrow">Selected work · {projects.length} systems</div>
-              <h2>What I&rsquo;ve shipped.</h2>
+              <div className="eyebrow">Career highlights</div>
+              <h2>What moved the needle.</h2>
             </div>
-            <div className="ledger">
-              {projects.map((p) => (
-                <a className="ledger-row" href={`/projects/${p.slug}`} key={p.slug}>
-                  <span className="name">{p.name}</span>
-                  <span className="desc">
-                    {p.tagline} · {p.stack.join(", ")}
-                  </span>
-                  <span className={`st${p.publicRepoStatus === "live" ? " live" : ""}`}>
-                    {p.publicRepoStatus === "live" ? "● Live" : `OSS · ${p.publicEtaWeek}`}
-                  </span>
-                </a>
+            <div className="highlights">
+              {HIGHLIGHTS.map((h, i) => (
+                <div className="hl-row" key={i}>
+                  <div className="hl-metric">{h.metric}</div>
+                  <div className="hl-text">{h.text}</div>
+                </div>
               ))}
             </div>
           </div>
         </section>
 
+        {/* Flagship deep-dive */}
         <section className="band">
           <div className="wrap">
             <div className="sec-head">
-              <div className="eyebrow">Technical stack</div>
-              <h2>What I build with.</h2>
+              <div className="eyebrow">Flagship deep-dive · Async ETL Platform</div>
+              <h2>Under the hood.</h2>
             </div>
-            <div className="stack-grid">
-              {STACK.map((col) => (
-                <div className="stack-col" key={col.title}>
-                  <h3>{col.title}</h3>
-                  {col.skills.map((s) => (
-                    <div className="skill" key={s.name}>
-                      <span className="nm">{s.name}</span>
-                      <span className="pc">{s.pct}</span>
-                      <span className="bar">
-                        {/* static fill — no scroll animation on this page */}
-                        <i style={{ width: `${s.pct}%` }} />
-                      </span>
-                    </div>
-                  ))}
+            <p className="dd-lead">
+              Nightly ingestion of millions of rows from a third-party API into a Postgres
+              warehouse that feeds dashboards and AI agents. It had to be{" "}
+              <strong>parallel, idempotent, and observable</strong> — one extractor failing
+              couldn&rsquo;t take down the rest, and a re-run had to produce the same result
+              every time. Here are the decisions that made that true.
+            </p>
+            <div className="dd-grid">
+              {DECISIONS.map((d) => (
+                <div className="dd-card" key={d.t}>
+                  <div className="dt">{d.t}</div>
+                  <div className="dd">{d.d}</div>
                 </div>
               ))}
+            </div>
+            <div className="dd-foot">
+              <a className="link-u" href="/projects/local-pipeline">
+                Read the full case study — architecture diagram + code →
+              </a>
             </div>
           </div>
         </section>

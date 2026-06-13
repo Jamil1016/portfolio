@@ -328,6 +328,33 @@ html { scroll-padding-top: 73px; }
 .home-shell .contact-line a { color: var(--strong); text-decoration: none; }
 .home-shell .contact-line a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
+/* how I work — principle cards */
+.home-shell .principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.home-shell .principle { border: 1px solid var(--line); background: var(--panel); padding: 26px 28px; }
+.home-shell .principle .pn { font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); }
+.home-shell .principle h3 { font-family: var(--font-serif), serif; font-weight: 400; font-size: 25px; line-height: 1.1; margin: 12px 0 10px; color: var(--strong); }
+.home-shell .principle p { margin: 0; color: var(--dim); font-size: 14.5px; line-height: 1.6; }
+
+/* career highlights — quantified achievements */
+.home-shell .highlights { border-top: 1px solid var(--rule); }
+.home-shell .hl-row {
+  display: grid; grid-template-columns: 230px 1fr; gap: 40px;
+  padding: 24px 0; border-bottom: 1px solid var(--line); align-items: baseline;
+}
+.home-shell .hl-row .hl-metric { font-family: var(--font-serif), serif; font-size: 32px; line-height: 1; color: var(--strong); font-variant-numeric: tabular-nums; }
+.home-shell .hl-row .hl-text { color: var(--dim); font-size: 15.5px; line-height: 1.55; max-width: 680px; }
+.home-shell .hl-row .hl-text strong { color: var(--text); font-weight: 600; }
+
+/* flagship deep-dive */
+.home-shell .dd-lead { font-size: 16px; line-height: 1.65; color: var(--dim); max-width: 720px; margin: 0 0 30px; }
+.home-shell .dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.home-shell .dd-card { border: 1px solid var(--line); background: var(--panel); padding: 22px 24px; }
+.home-shell .dd-card .dt { font-family: var(--font-mono), monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--strong); margin-bottom: 8px; }
+.home-shell .dd-card .dd { color: var(--dim); font-size: 14px; line-height: 1.6; }
+.home-shell .dd-card .dd em { font-style: normal; color: var(--green); }
+.home-shell .dd-card .dd code { font-family: var(--font-mono), monospace; font-size: 0.9em; color: var(--strong); }
+.home-shell .dd-foot { margin-top: 24px; }
+
 /* ---------- contact + footer ---------- */
 .home-shell .contact { padding: 110px 0; text-align: center; border-bottom: 1px solid var(--rule); }
 .home-shell .contact h2 { font-family: var(--font-serif), serif; font-weight: 400; font-size: clamp(56px, 6vw, 88px); line-height: 1; margin: 22px 0 26px; color: var(--strong); }
@@ -378,5 +405,8 @@ html { scroll-padding-top: 73px; }
   .home-shell .training-top { grid-template-columns: 1fr; gap: 40px; }
   .home-shell .s2p-grid { grid-template-columns: 1fr; }
   .home-shell .xp-row { grid-template-columns: 1fr; gap: 8px; }
+  .home-shell .principles { grid-template-columns: 1fr; }
+  .home-shell .hl-row { grid-template-columns: 1fr; gap: 6px; }
+  .home-shell .dd-grid { grid-template-columns: 1fr; }
   .home-shell .nav-links a:not(.btn):not(.tt-link) { display: none; }
 }
