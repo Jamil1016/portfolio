@@ -1,5 +1,6 @@
+import "@/app/home.css";
 import type { ProjectMeta } from "@/lib/projects";
-import Link from "next/link";
+import { SiteHeader } from "@/components/home/SiteHeader";
 import { TagPills } from "./TagPills";
 
 export function CaseStudyLayout({
@@ -10,37 +11,46 @@ export function CaseStudyLayout({
   children: React.ReactNode;
 }) {
   return (
-    <article className="mx-auto max-w-3xl px-4 py-16">
-      <Link href="/" className="text-sm text-slate-500 hover:text-slate-300">
-        ← back to home
-      </Link>
-      <header className="mt-8 border-b border-slate-800 pb-8">
-        <h1 className="text-4xl font-semibold tracking-tight text-slate-50">
-          {project.name}
-        </h1>
-        <p className="mt-2 text-lg text-slate-400">{project.tagline}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {project.stack.map((s) => (
-            <span
-              key={s}
-              className="rounded-md border border-slate-800 px-2 py-0.5 text-xs text-slate-400"
-            >
-              {s}
-            </span>
-          ))}
+    <div className="home-shell">
+      <SiteHeader />
+      <main>
+        <section className="cs-head">
+          <div className="wrap">
+            <div className="eyebrow">
+              Case study ·{" "}
+              {project.publicRepoStatus === "live" ? "Live" : `OSS · ${project.publicEtaWeek}`}
+            </div>
+            <h1>{project.name}</h1>
+            <p className="tagline">{project.tagline}</p>
+            <div className="stack">
+              {project.stack.map((s) => (
+                <span key={s}>{s}</span>
+              ))}
+            </div>
+            {project.publicRepoStatus === "coming" && (
+              <div className="cs-status">
+                Open-source reference implementation coming {project.publicEtaWeek}
+              </div>
+            )}
+            <TagPills tags={project.tags} />
+          </div>
+        </section>
+
+        <article className="wrap">
+          <div className="cs-prose">{children}</div>
+        </article>
+      </main>
+
+      <footer>
+        <div className="wrap foot">
+          <span>© 2026 Jamil Mendez · jamilmendez.dev</span>
+          <span>
+            <a href="/#work">Work</a>
+            <a href="/projects">All projects</a>
+            <a href="/">Home</a>
+          </span>
         </div>
-        {project.publicRepoStatus === "coming" && (
-          <p className="mt-4 font-mono text-xs text-slate-500">
-            Open-source reference implementation coming {project.publicEtaWeek}
-          </p>
-        )}
-        <div className="mt-4">
-          <TagPills tags={project.tags} />
-        </div>
-      </header>
-      <div className="prose prose-invert prose-slate mt-8 max-w-none">
-        {children}
-      </div>
-    </article>
+      </footer>
+    </div>
   );
 }

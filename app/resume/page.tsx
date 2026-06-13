@@ -1,5 +1,5 @@
 import "../home.css";
-import { ThemeToggle } from "@/components/home/ThemeToggle";
+import { SiteHeader } from "@/components/home/SiteHeader";
 import { GITHUB_URL, CONTACT_EMAIL } from "@/lib/site-data";
 
 export const metadata = { title: "Resume — Jamil Mendez" };
@@ -116,23 +116,13 @@ const DECISIONS = [
 export default function Resume() {
   return (
     <div className="home-shell">
-      <header>
-        <div className="wrap nav">
-          <a className="wordmark" href="/">
-            Jamil <em>Mendez.</em>
+      <SiteHeader
+        cta={
+          <a className="btn" href="/resume.pdf" download>
+            Download PDF
           </a>
-          <nav className="nav-links">
-            <a href="/#work">Work</a>
-            <a href="/#stack">Stack</a>
-            <a href="/#training">Training</a>
-            <a href="/#experience">About</a>
-            <ThemeToggle />
-            <a className="btn" href="/resume.pdf" download>
-              Download PDF
-            </a>
-          </nav>
-        </div>
-      </header>
+        }
+      />
 
       <main>
         <section className="page-intro">
