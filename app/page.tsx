@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   return (
-    <div className="home-shell" data-active="home">
+    <div className="home-shell">
       <Nav />
       <main>
         <Hero />

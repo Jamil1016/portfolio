@@ -3,19 +3,17 @@
 import { useEffect } from "react";
 
 /**
- * Home-page behavior controller.
- *
- * - Home tab = the full single-page scroll (all segments). Scroll-spy moves the
- *   nav underline as you scroll through it.
- * - Work / Stack / Training / About = isolate that one segment.
- * - Count-up + bar-fill animations fire when a segment scrolls into view (home)
- *   or becomes visible after a tab switch. Reduced-motion sets finals at once.
+ * Single-page home behaviors:
+ * - Nav / CTA / footer links smooth-scroll to their section (offset for the
+ *   sticky header). No view replacement — everything is one scrolling page.
+ * - Scroll-spy moves the nav underline to the section currently in view.
+ * - Count-up + bar-fill animations fire when a section scrolls into view.
+ *   Reduced-motion sets final values immediately.
  */
 export function HomeEffects() {
   useEffect(() => {
-    const shell = document.querySelector<HTMLElement>(".home-shell");
-    if (!shell) return;
     const root = document.documentElement;
+    const HEADER = 73;
     const motionOn = () =>
       root.dataset.motion !== "off" &&
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -70,35 +68,44 @@ export function HomeEffects() {
     });
     cleanups.push(() => animIO.disconnect());
 
-    // ---------- nav underline + tab switching ----------
+    // ---------- nav underline ----------
     const links = Array.from(
       document.querySelectorAll<HTMLElement>(".tablink[data-tablink]"),
     );
     const setActiveLink = (tab: string) =>
       links.forEach((l) => l.classList.toggle("active", l.dataset.tablink === tab));
 
-    function activate(tab: string) {
-      shell!.setAttribute("data-active", tab);
-      setActiveLink(tab);
-      window.scrollTo({ top: 0, behavior: "auto" });
-    }
-
+    // ---------- smooth-scroll on click ----------
+    let spyLock = false;
+    let spyTimer: ReturnType<typeof setTimeout> | undefined;
     const clickHandlers: Array<[HTMLElement, (e: Event) => void]> = [];
-    document.querySelectorAll<HTMLElement>("[data-tablink]").forEach((l) => {
+    document.querySelectorAll<HTMLAnchorElement>("[data-tablink]").forEach((l) => {
       const handler = (e: Event) => {
-        const tab = l.dataset.tablink;
-        if (!tab) return;
+        const hash = l.getAttribute("href") || "";
+        const target = hash.startsWith("#") ? document.querySelector(hash) : null;
+        if (!target) return; // let non-anchor links behave normally
         e.preventDefault();
-        activate(tab);
+        const tab = l.dataset.tablink;
+        if (tab) setActiveLink(tab);
+        const y =
+          (target as HTMLElement).getBoundingClientRect().top + window.scrollY - HEADER;
+        window.scrollTo({ top: Math.max(0, y), behavior: motionOn() ? "smooth" : "auto" });
+        // freeze the spy briefly so the underline lands on the clicked tab
+        spyLock = true;
+        clearTimeout(spyTimer);
+        spyTimer = setTimeout(() => {
+          spyLock = false;
+        }, 800);
       };
       l.addEventListener("click", handler);
       clickHandlers.push([l, handler]);
     });
-    cleanups.push(() =>
-      clickHandlers.forEach(([el, h]) => el.removeEventListener("click", h)),
-    );
+    cleanups.push(() => {
+      clickHandlers.forEach(([el, h]) => el.removeEventListener("click", h));
+      clearTimeout(spyTimer);
+    });
 
-    // ---------- scroll-spy (home scroll view only) ----------
+    // ---------- scroll-spy ----------
     const SECTION_TAB: Record<string, string> = {
       hero: "home",
       work: "work",
@@ -117,8 +124,7 @@ export function HomeEffects() {
     });
     const spyIO = new IntersectionObserver(
       (entries) => {
-        // Only drive the underline from scroll position in the full-scroll view.
-        if (shell!.dataset.active !== "home") return;
+        if (spyLock) return;
         entries.forEach((en) => {
           if (en.isIntersecting)
             setActiveLink((en.target as HTMLElement).dataset.spyTab || "home");
