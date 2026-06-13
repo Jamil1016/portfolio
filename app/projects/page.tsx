@@ -1,20 +1,46 @@
-import Link from "next/link";
+import "../home.css";
 import { projects } from "@/lib/projects";
+import { SiteHeader } from "@/components/home/SiteHeader";
 import { TagFilter } from "@/components/projects/TagFilter";
+import { GITHUB_URL, CONTACT_EMAIL } from "@/lib/site-data";
 
 export const metadata = { title: "Projects — Jamil Mendez" };
 
 export default function ProjectsIndex() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-16">
-      <Link href="/" className="text-sm text-slate-500 hover:text-slate-300">
-        ← back
-      </Link>
-      <h1 className="mt-6 text-3xl font-semibold text-slate-50">Projects</h1>
-      <p className="mt-2 text-slate-400">Engineering systems that operate themselves.</p>
-      <div className="mt-10">
-        <TagFilter projects={projects} />
-      </div>
-    </main>
+    <div className="home-shell">
+      <SiteHeader />
+      <main>
+        <section className="page-intro">
+          <div className="wrap">
+            <div className="eyebrow">Projects · {projects.length} systems</div>
+            <h1>Systems that operate themselves.</h1>
+            <p className="sub">
+              Production data + AI systems, not toy demos. Filter by stack, pattern, or
+              domain — every entry links to a case study with architecture diagrams.
+            </p>
+          </div>
+        </section>
+
+        <section className="band">
+          <div className="wrap">
+            <TagFilter projects={projects} />
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div className="wrap foot">
+          <span>© 2026 Jamil Mendez · jamilmendez.dev</span>
+          <span>
+            <a href="/">Home</a>
+            <a href={`mailto:${CONTACT_EMAIL}`}>Email</a>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+              GitHub
+            </a>
+          </span>
+        </div>
+      </footer>
+    </div>
   );
 }

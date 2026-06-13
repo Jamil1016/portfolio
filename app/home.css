@@ -355,6 +355,64 @@ html { scroll-padding-top: 73px; }
 .home-shell .dd-card .dd code { font-family: var(--font-mono), monospace; font-size: 0.9em; color: var(--strong); }
 .home-shell .dd-foot { margin-top: 24px; }
 
+/* ---------- projects index: tag filter ---------- */
+.home-shell .tagfilter-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-shell .tf-tag {
+  font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.06em;
+  border-radius: 999px; padding: 6px 13px; cursor: pointer; text-decoration: none;
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--line); transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.home-shell .tf-tag:hover { border-color: var(--rule-strong); color: var(--strong); }
+.home-shell .tf-tag.on { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
+.home-shell .tf-showing { margin-top: 18px; font-family: var(--font-mono), monospace; font-size: 12px; color: var(--faint); display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.home-shell .tf-showing .val { color: var(--strong); }
+.home-shell .tf-showing .clear { color: var(--green); cursor: pointer; background: none; border: none; font: inherit; padding: 0; }
+
+.home-shell .proj-list { margin-top: 32px; border-top: 1px solid var(--rule); }
+.home-shell .proj-row {
+  display: grid; grid-template-columns: 1.1fr 1.6fr auto; gap: 28px; align-items: baseline;
+  padding: 22px 0; border-bottom: 1px solid var(--line); text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+.home-shell .proj-row:hover { background: var(--panel); }
+.home-shell .proj-row.dimmed { opacity: 0.3; }
+.home-shell .proj-row .pr-name { font-family: var(--font-serif), serif; font-size: 26px; color: var(--strong); }
+.home-shell .proj-row .pr-desc { color: var(--dim); font-size: 14.5px; line-height: 1.5; }
+.home-shell .proj-row .pr-tags { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 5px 10px; }
+.home-shell .proj-row .pr-tags span { font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: 0.04em; color: var(--faint); }
+.home-shell .proj-row .pr-st { font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--faint); white-space: nowrap; }
+.home-shell .proj-row .pr-st.live { color: var(--green); }
+
+/* ---------- case study ---------- */
+.home-shell .cs-head { padding: 48px 0 36px; border-bottom: 1px solid var(--rule); }
+.home-shell .cs-head h1 { font-family: var(--font-serif), serif; font-weight: 400; font-size: clamp(40px, 4.5vw, 64px); line-height: 1.02; letter-spacing: -0.01em; margin: 16px 0 12px; color: var(--strong); }
+.home-shell .cs-head .tagline { font-size: 18px; line-height: 1.5; color: var(--dim); max-width: 660px; margin: 0 0 20px; }
+.home-shell .cs-head .stack { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.home-shell .cs-head .stack span { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
+.home-shell .cs-head .cs-status { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--faint); margin-bottom: 16px; }
+
+/* MDX prose */
+.home-shell .cs-prose { max-width: 760px; padding: 12px 0 64px; font-size: 16px; line-height: 1.7; color: var(--text); }
+.home-shell .cs-prose > * + * { margin-top: 18px; }
+.home-shell .cs-prose h2 { font-family: var(--font-serif), serif; font-weight: 400; font-size: 34px; line-height: 1.1; color: var(--strong); margin: 48px 0 4px; }
+.home-shell .cs-prose h3 { font-family: var(--font-serif), serif; font-weight: 400; font-size: 24px; color: var(--strong); margin: 32px 0 0; }
+.home-shell .cs-prose p { color: var(--dim); }
+.home-shell .cs-prose strong { color: var(--text); font-weight: 600; }
+.home-shell .cs-prose a { color: var(--strong); text-decoration: underline; text-underline-offset: 4px; }
+.home-shell .cs-prose ul, .home-shell .cs-prose ol { padding-left: 22px; color: var(--dim); }
+.home-shell .cs-prose li { margin-top: 8px; }
+.home-shell .cs-prose li strong { color: var(--text); }
+.home-shell .cs-prose code { font-family: var(--font-mono), monospace; font-size: 0.88em; background: var(--soft); padding: 2px 6px; border-radius: 4px; color: var(--strong); }
+.home-shell .cs-prose pre { background: var(--panel); border: 1px solid var(--line); padding: 20px 22px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+.home-shell .cs-prose pre code { background: none; padding: 0; font-size: inherit; color: var(--text); }
+.home-shell .cs-prose blockquote { border-left: 2px solid var(--rule); padding-left: 18px; color: var(--dim); font-style: italic; }
+.home-shell .cs-prose hr { border: none; border-top: 1px solid var(--line); margin: 32px 0; }
+
+/* mermaid diagram container */
+.home-shell .cs-diagram { margin: 24px 0; display: flex; justify-content: center; overflow-x: auto; border: 1px solid var(--line); background: var(--panel); padding: 22px; }
+.home-shell .cs-diagram--state { min-height: 130px; align-items: center; color: var(--faint); font-family: var(--font-mono), monospace; font-size: 12px; white-space: pre-wrap; }
+
 /* ---------- contact + footer ---------- */
 .home-shell .contact { padding: 110px 0; text-align: center; border-bottom: 1px solid var(--rule); }
 .home-shell .contact h2 { font-family: var(--font-serif), serif; font-weight: 400; font-size: clamp(56px, 6vw, 88px); line-height: 1; margin: 22px 0 26px; color: var(--strong); }
@@ -408,5 +466,7 @@ html { scroll-padding-top: 73px; }
   .home-shell .principles { grid-template-columns: 1fr; }
   .home-shell .hl-row { grid-template-columns: 1fr; gap: 6px; }
   .home-shell .dd-grid { grid-template-columns: 1fr; }
+  .home-shell .proj-row { grid-template-columns: 1fr; gap: 8px; }
+  .home-shell .proj-row .pr-st { order: -1; }
   .home-shell .nav-links a:not(.btn):not(.tt-link) { display: none; }
 }
