@@ -40,7 +40,7 @@ function SystemsPanel() {
 
 export function Hero() {
   return (
-    <section className="hero" id="hero" data-screen-label="Hero">
+    <section className="hero" id="hero" data-tab="home" data-screen-label="Hero">
       <div className="wrap hero-grid">
         <div className="hero-left">
           <div className="eyebrow">
@@ -56,7 +56,7 @@ export function Hero() {
             the pipelines healthy. Built in Python, Postgres, and the Claude&nbsp;API.
           </p>
           <div className="cta-row">
-            <a className="btn" href="#work">
+            <a className="btn" href="#work" data-tablink="work">
               View case studies
             </a>
             <a className="link-u" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">

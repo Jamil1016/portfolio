@@ -2,7 +2,7 @@ import { EXPERIENCE } from "@/lib/site-data";
 
 export function Experience() {
   return (
-    <section className="band" id="experience" data-screen-label="Experience">
+    <section className="band" id="experience" data-tab="about" data-screen-label="Experience">
       <div className="wrap">
         <div className="sec-head">
           <div className="eyebrow">Experience log</div>

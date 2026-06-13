@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   return (
-    <div className="home-shell">
+    <div className="home-shell" data-active="home">
       <Nav />
       <main>
         <Hero />
@@ -31,17 +31,13 @@ export default function HomePage() {
         <div className="wrap foot">
           <span>© 2026 Jamil Mendez · jamilmendez.dev</span>
           <span>
-            <a href="#work">Work</a>
-            <a href="#stack">Stack</a>
-            <a href="#training">Training</a>
-            <a href="#contact">Contact</a>
+            <a href="#work" data-tablink="work">Work</a>
+            <a href="#stack" data-tablink="stack">Stack</a>
+            <a href="#training" data-tablink="training">Training</a>
+            <a href="#contact" data-tablink="about">Contact</a>
           </span>
         </div>
       </footer>
-
-      <div className="scroll-hint" id="scroll-hint" aria-hidden="true">
-        scroll <span className="ar">↓</span>
-      </div>
 
       <HomeEffects />
     </div>

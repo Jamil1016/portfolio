@@ -2,7 +2,7 @@ import { CONTACT_EMAIL, GITHUB_URL } from "@/lib/site-data";
 
 export function Contact() {
   return (
-    <section className="contact" id="contact" data-screen-label="Contact">
+    <section className="contact" id="contact" data-tab="about" data-screen-label="Contact">
       <div className="wrap">
         <div className="eyebrow" style={{ justifyContent: "center" }}>
           <span className="dot" /> Open to AI / Data Engineer roles

@@ -4,7 +4,7 @@ import { ALL_TAGS } from "@/lib/tags";
 export function Stats() {
   return (
     <>
-      <section className="stats-band" data-screen-label="Stats">
+      <section className="stats-band" data-tab="home" data-screen-label="Stats">
         <div className="wrap stats">
           {STATS.map((s) => (
             <div className="stat" key={s.label}>
@@ -24,7 +24,7 @@ export function Stats() {
         </div>
       </section>
 
-      <div className="ticker" data-screen-label="Tag ticker" aria-hidden="true">
+      <div className="ticker" data-tab="home" data-screen-label="Tag ticker" aria-hidden="true">
         <div className="ticker-track">
           {[...ALL_TAGS, ...ALL_TAGS].map((t, i) => (
             <span key={`${t}-${i}`}>{t} ·</span>
