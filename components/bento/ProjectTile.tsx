@@ -34,11 +34,14 @@ export function ProjectTile({
             >
               Read case study →
             </Link>
-            {project.publicRepoStatus === "coming" && project.publicEtaWeek && (
-              <span className="font-mono text-slate-500">
-                OSS · {project.publicEtaWeek}
-              </span>
-            )}
+            <span className="font-mono text-slate-500">
+              {project.prod === "production" ? "In production" : "Prototype"} ·{" "}
+              {project.code === "public"
+                ? "public"
+                : project.code === "private"
+                  ? "private"
+                  : `OSS ${project.etaWeek ?? "soon"}`}
+            </span>
           </div>
         </div>
       </div>

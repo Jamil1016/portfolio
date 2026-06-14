@@ -1,93 +1,94 @@
 ## The Problem
 
-Two systems were the authoritative source for "when did task X happen" — one was the operational platform, the other was an email-driven status workflow. They drifted constantly. Operators were finding the mismatches days or weeks later, by which point the upstream context was lost.
+Two systems were authoritative for "when did this task complete." The operational platform (Swift) held the asset-task dates; an email-driven status workflow reported a `cop_complete` (and, separately, a 48-hour package) date to the carrier. They drifted constantly, and operators only found the mismatches weeks later when the upstream context was already gone.
 
-The fix had to be cheap to run nightly, surface only real mismatches (false positives kill adoption), and produce a diff humans could act on without a database query.
+The fix had to surface only real mismatches — false positives kill adoption — and the matching was the hard part. There's no clean shared key. The carrier's project ID is present on some emails and not others; different carriers report through different cadences; one email can plausibly belong to several site variants. A single natural-key join produced empty or wrong results. The validator had to route per carrier, match through several methods with a confidence signal, and hand operators a diff they could act on without a database query.
 
 ## Architecture
 
 <MermaidDiagram>{`
-graph LR
-  A[(Source A:<br/>task dates)] --> N[Natural-key<br/>normalizer]
-  B[(Source B:<br/>email dates)] --> N
-  N --> J[Inner join +<br/>diff]
-  J --> O[Excel report]
-  O --> S[Google Sheets<br/>upload]
-  S --> E[Email to<br/>operators]
+graph TB
+  AT[(stg_asset_tasks<br/>+ stg_assets)] --> V[analytics view:<br/>multi-method match]
+  EM[(stg_package_emails)] --> V
+  V --> D{delta vs<br/>snapshot}
+  D -->|cop / 48hr<br/>per carrier| F[flag + confidence<br/>tally]
+  F --> SH[rolling Google Sheets]
+  F --> ML[email: Scrub/Confirm<br/>buttons]
+  ML -->|PATCH| API[Swift API<br/>via Apps Script webapp]
+  D --> SNAP[(snapshot:<br/>refuse-empty guard)]
+  SNAP -.->|Tue–Fri freeze<br/>weekly carriers| D
 `}</MermaidDiagram>
 
-Both sources are pulled fresh every night. The natural-key normalizer handles the messy real-world variants — whitespace inside values, two-digit years, placeholder strings like "--/--/----". After normalization, an inner join surfaces only rows that exist in both sources and have different dates. The diff lands in an Excel file, gets uploaded to a shared Google Sheet for visibility, and an email summary goes to the operators who can act.
+A Postgres view does the matching: it joins Final-COP (or 48Hr) asset-tasks against the latest matching package email, deriving a `flag` (`match`, `date_mismatch`, `missing_in_email`, `unparseable_email_date`), a `match_method`, a `disambiguation_score`, and a `confidence`. The Python layer fetches the current task set per kind and carrier, diffs it against a snapshot of what it saw last run, tallies only the delta, and delivers two ways: a rolling Google Sheet, and an email whose action items carry one-click Scrub/Confirm buttons that PATCH the Swift API through an Apps Script web app. A separate month-end subsystem closes each month with per-carrier incomplete emails and an all-complete KPI dashboard.
 
 ## Key Decisions
 
-- **Natural keys over surrogate IDs.** The two systems assigned different surrogate IDs to the same real-world entity. Joining on the surrogates produced empty results. Joining on (normalized) natural keys produced the actual diff.
-- **Daily cadence, not real-time.** Real-time alerting on every divergence drowned the operators in noise. A once-a-day batch let them triage the day's drift in one sitting.
-- **Normalization as a first-class step, not a side-effect of the SQL.** The normalizer is a tested function. Adding new edge cases (e.g. a new placeholder string) extends the function, not the join condition.
-- **Idempotent Sheets upload.** The same sheet gets rewritten each night, not appended. Last run is always current state.
+- **Multi-method matching with a confidence signal — not one natural-key join.** Matching runs through `id_match` (the 8-digit FUZE), `name_match` (TMO site name), and `subject_match` (asset name found in the subject), each carrying a `disambiguation_score`. The view emits `confidence` of high/medium/low and `is_best_match` so a reviewer triages weak pairings first instead of trusting a silent join.
+- **Weekly cadence for AT&T/TMO, daily for Verizon.** AT&T/DISH and TMO/USCC roll forward on Mondays only; Verizon updates daily. `compute_weekly_cadence_snapshot` freezes the weekly carriers Tuesday–Friday and only advances the daily ones, so a weekly carrier's rows don't churn the delta mid-week.
+- **Refuse to truncate the snapshot on zero rows.** `replace_snapshot` does `TRUNCATE + COPY` in one transaction — but if the incoming row set is empty (usually a transient upstream state, like an analytics MV mid-refresh) it refuses to truncate and leaves the prior snapshot intact. An empty truncate was the exact bug that once blanked the comparison baseline.
+- **Weekend skip with Monday rollup.** A `WeekendSkip` preflight exits on Saturday/Sunday ET without writing anything. The snapshot stays at Friday's state, so Monday's run computes a Friday-through-Monday cumulative delta that surfaces everything added over the weekend.
+- **`DISTINCT ON (task_did)` dedup at the source.** `stg_asset_tasks` can land byte-identical duplicate rows upstream; without the guard the duplicate propagates into the snapshot COPY and trips the primary key.
 
 ## Code Samples
 
-Natural-key normalization that handles the date-string nightmares observed in production:
+Confidence derived from match method and disambiguation score — low confidence is what a reviewer sees first:
 
 ```python
-PLACEHOLDER_PATTERNS = [
-    re.compile(r"^[-/]+$"),       # "--/--/----"
-    re.compile(r"^\s*N/?A\s*$", re.I),
-    re.compile(r"^pending", re.I),
-]
-
-def normalize_date(raw: str | None) -> date | None:
-    if raw is None or not raw.strip():
-        return None
-    s = raw.strip()
-    for p in PLACEHOLDER_PATTERNS:
-        if p.match(s):
-            return None
-    # Strip embedded spaces inside the value: "02-1 9 -2026" -> "02-19-2026"
-    s = re.sub(r"(?<=\d)\s+(?=\d)", "", s)
-    for fmt in ("%m-%d-%Y", "%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            continue
-    return None
+@property
+def confidence(self) -> str:
+    if self.email_message_id is None:
+        return "n/a"
+    score = self.disambiguation_score or 0
+    if self.match_method == "subject_match":
+        return "medium" if score >= 1000 else "low"
+    if self.match_method == "name_match":
+        return "high"
+    if self.match_method == "id_match":
+        if not self.is_ambiguous or score >= 1000:
+            return "high"
+        return "medium" if score >= 300 else "low"
+    return "n/a"
 ```
 
-The diff routine — deterministic and idempotent:
+The snapshot guard — an empty result set must never blank the baseline:
 
 ```python
-def diff_sources(a: list[Row], b: list[Row]) -> list[Diff]:
-    by_key = {r.key: r for r in a}
-    diffs: list[Diff] = []
-    for rb in b:
-        ra = by_key.get(rb.key)
-        if ra is None:
-            continue  # only-in-B is handled by a separate report
-        if ra.date != rb.date:
-            diffs.append(
-                Diff(
-                    key=rb.key,
-                    source_a=ra.date,
-                    source_b=rb.date,
-                    gap_days=(rb.date - ra.date).days if ra.date and rb.date else None,
-                )
-            )
-    return sorted(diffs, key=lambda d: (d.gap_days or 0, d.key), reverse=True)
+if not records:
+    logger.warning(
+        f"[{kind}] replace_snapshot called with 0 rows — refusing to "
+        f"truncate {cfg['snapshot_table']}; leaving prior snapshot intact"
+    )
+    return
+async with pool.acquire() as conn:
+    async with conn.transaction():
+        await conn.execute(f"TRUNCATE data_staging.{cfg['snapshot_table']}")
+        await conn.copy_records_to_table(cfg["snapshot_table"], ...)
+```
+
+Weekly carriers frozen Tue–Fri, daily carriers advanced, deduped before they hit the snapshot PK:
+
+```python
+weekly_rows = [r for r in prev_snapshot if is_weekly_carrier(r.carrier_group)]
+daily_rows  = [r for r in current_set   if not is_weekly_carrier(r.carrier_group)]
+# Weekly precedence: a task frozen on Monday must not also advance as "daily"
+weekly_dids = {r.task_did for r in weekly_rows}
+daily_rows  = [r for r in daily_rows if r.task_did not in weekly_dids]
+return weekly_rows + daily_rows
 ```
 
 ## Metrics
 
-- **Mismatches surfaced:** dozens per week, sorted by gap-days descending
-- **False-positive rate:** under 5% once the normalizer covered the recurring placeholders
-- **Operator triage time:** minutes per day vs. hours previously spent hunting drift
-- **Run cost:** under 30 seconds nightly, idempotent re-runs
+- **Two task kinds × three carrier buckets:** COP + 48Hr across Verizon / AT&T+DISH / TMO+USCC, with per-carrier routing and cadence.
+- **`try_parse_cop_date` handles 176 distinct date patterns** observed in the email corpus; anything else returns NULL and is flagged `unparseable_email_date` rather than guessed.
+- **48Hr corpus = 2,031 emails, all Verizon** (verified 2026-05-06) — which is why AT&T/TMO are dropped from 48Hr processing entirely, so they never generate `missing_in_email` noise.
+- **34 migrations** evolving the matching view, and **18 test modules** covering the parser, flag logic, delta detection, preflight, and snapshot-guard scenarios.
 
 ## What I Learned
 
-- **Data quality bugs live in the join key.** Engineers reach for "the SQL is wrong" first. Almost always the SQL is fine and the inputs are unnormalized.
-- **Normalization deserves a tested function, not inline transforms.** Once it's a function with cases pinned by tests, adding new edge cases is a one-line change with regression protection.
-- **Idempotent reports are easier to trust.** Operators can re-run when they want fresher numbers without worrying about double-counts.
+- **Data-quality bugs live in the match key, not the SQL.** The instinct is "the join is wrong." Almost always the join is fine and the inputs don't share a clean key. Routing through several match methods with an explicit confidence score beat any attempt to force one universal key.
+- **Guard the destructive operation against the empty case.** A `TRUNCATE + COPY` is correct until the COPY has nothing to write. Refusing to empty on zero rows is one cheap conditional that prevented the worst failure mode — a silently blanked baseline.
+- **Cadence is a first-class concern.** Carriers don't report on the same rhythm. Encoding weekly-vs-daily and a weekend rollup into the snapshot logic kept the daily delta honest instead of drowning operators in churn.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/date-validator) — open-source reference implementation lands W11 of the AI Engineer learning path.
+[GitHub repo](https://github.com/Jamil1016/date-validator) — private (work org). Open-source reference write-up lands W11 of the AI Engineer learning path.

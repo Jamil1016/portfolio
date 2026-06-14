@@ -2,10 +2,10 @@ import Link from "next/link";
 import { projects, type ProjectMeta } from "@/lib/projects";
 
 function statusNode(p: ProjectMeta) {
-  return p.publicRepoStatus === "live" ? (
-    <span className="live">● Live</span>
+  return p.prod === "production" ? (
+    <span className="live">● In production</span>
   ) : (
-    <span>OSS · {p.publicEtaWeek}</span>
+    <span>Prototype</span>
   );
 }
 
@@ -38,7 +38,7 @@ export function Work() {
             </div>
             <h3>{featured.name}</h3>
             <p>{featured.tagline}</p>
-            <div className="metric">6.2M rows / night · 25 tables · 99%+ uptime</div>
+            <div className="metric">~2.2M rows / night · 12 pipelines · 2–3 min transform</div>
             <Chips tags={featured.tags} />
           </Link>
 
@@ -62,8 +62,8 @@ export function Work() {
             <Link className="ledger-row" href={`/projects/${p.slug}`} key={p.slug}>
               <span className="name">{p.name}</span>
               <span className="desc">{p.tagline}</span>
-              <span className={`st${p.publicRepoStatus === "live" ? " live" : ""}`}>
-                {p.publicRepoStatus === "live" ? "● Live" : `OSS · ${p.publicEtaWeek}`}
+              <span className={`st${p.prod === "production" ? " live" : ""}`}>
+                {p.prod === "production" ? "● In production" : "Prototype"}
               </span>
             </Link>
           ))}

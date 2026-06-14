@@ -90,8 +90,8 @@ export function TagFilter({ projects }: { projects: ProjectMeta[] }) {
                 ))}
               </div>
             </div>
-            <span className={`pr-st${p.publicRepoStatus === "live" ? " live" : ""}`}>
-              {p.publicRepoStatus === "live" ? "● Live" : `OSS · ${p.publicEtaWeek}`}
+            <span className={`pr-st${p.prod === "production" ? " live" : ""}`}>
+              {p.prod === "production" ? "● In production" : "Prototype"}
             </span>
           </Link>
         ))}

@@ -18,7 +18,12 @@ export function CaseStudyLayout({
           <div className="cs-wrap">
             <div className="eyebrow">
               Case study ·{" "}
-              {project.publicRepoStatus === "live" ? "Live" : `OSS · ${project.publicEtaWeek}`}
+              {project.prod === "production" ? "In production" : "Prototype"} ·{" "}
+              {project.code === "public"
+                ? "public repo"
+                : project.code === "private"
+                  ? "private repo"
+                  : "OSS coming"}
             </div>
             <h1>{project.name}</h1>
             <p className="tagline">{project.tagline}</p>
@@ -27,9 +32,9 @@ export function CaseStudyLayout({
                 <span key={s}>{s}</span>
               ))}
             </div>
-            {project.publicRepoStatus === "coming" && (
+            {project.code === "coming" && (
               <div className="cs-status">
-                Open-source reference implementation coming {project.publicEtaWeek}
+                Open-source reference implementation coming {project.etaWeek ?? "soon"}
               </div>
             )}
             <TagPills tags={project.tags} />

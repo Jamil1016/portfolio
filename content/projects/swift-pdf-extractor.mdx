@@ -1,82 +1,92 @@
 ## The Problem
 
-A nightly job pulled PDF attachments from an inbox, extracted structured data (form values, table rows, signatures), and stored it for downstream analytics. The first version processed roughly 0.5 attachments per second on a single thread — at thousands of attachments per month, the job crept past its window and began failing on cold starts.
+An org's requirement files — mostly RFDS PDFs — lived behind the Swift Projects REST API, scattered across a deep hierarchy: project → asset → task → asset-task → requirement → file. Pulling them by hand meant clicking through that tree project by project. For a single org that's tens of thousands of asset-tasks to walk and thousands of PDFs to download.
 
-The fix had to keep the same correctness guarantees while running fast enough to clear the backlog and keep up with new arrivals.
+The job also ran over a residential internet connection for hours at a stretch. Any tool that couldn't survive a mid-run outage and pick up exactly where it left off would force a full restart every time the wifi blinked. So the real constraints were two: walk the API hierarchy fast enough to finish in a sitting, and make a multi-hour, network-fragile run safely resumable.
 
 ## Architecture
 
 <MermaidDiagram>{`
 graph LR
-  G[Mail API] -->|message ids| F[Attachment fetcher<br/>ThreadPool]
-  F --> Q[(Cache: /tmp/pdfs)]
-  Q --> E[PDF extractor<br/>ProcessPool]
-  E --> P[(Postgres<br/>JSONB)]
+  DB[(stg_projects)] -->|enumerate org| O[run_org<br/>orchestrator]
+  O -->|per project| S[Scan pool<br/>32 threads]
+  S -->|asset-tasks →<br/>requirements → files| Q[download<br/>queue]
+  Q --> D[Download pool<br/>16 threads]
+  D -->|presigned S3<br/>stream to disk| F[(flat PDFs<br/>asset_id__file.pdf)]
+  O --> P[(_progress.json<br/>resume state)]
+  O --> X[(_failures.xlsx)]
 `}</MermaidDiagram>
 
-The bottleneck split cleanly along workload shape: API calls are IO-bound, PDF text extraction is CPU-bound. Two different pools for the two different shapes of work. A local filesystem cache between the stages lets re-runs after a parser bugfix skip the API entirely — idempotent fetch plus idempotent extract equals an idempotent pipeline.
+The orchestrator reads an org's project list from a read-only Postgres table (`stg_projects`), smallest project first so a quick one validates the run before the big ones tie up time. Each project runs through two thread pools. The scan pool (32 workers) lists asset-tasks, then their requirements, then the files behind each name-matched, submitted/approved requirement. The download pool (16 workers) drains the resulting queue, resolves each file's presigned S3 URL, and streams the bytes to disk. Both stages are IO-bound — waiting on network, not CPU — so threads, not processes. Output is a flat layout, `<asset_id>__<filename>.pdf`, and the asset_id makes filenames collision-free across the org.
 
 ## Key Decisions
 
-- **ThreadPool for fetch, ProcessPool for extract.** IO-bound work needs concurrency; CPU-bound work needs parallelism. Using the wrong pool for either halves the speedup.
-- **Local filesystem cache between the two stages.** Re-running extraction after a parser fix doesn't re-hit the API. Cache key is the upstream message id — stable, collision-free, no invalidation logic needed.
-- **Skip OCR by default.** Most PDFs already had a text layer. OCR was the slow path — used only as the fallback when text-layer extraction returned empty.
-- **Bounded queue between stages.** Memory stays flat regardless of inbox size; the slowest stage paces the rest.
+- **Two thread pools, both IO-bound.** Scanning the hierarchy and streaming bytes are different shapes of waiting-on-the-network. A wide scan pool (32) keeps discovery saturated; a narrower download pool (16) streams files without overwhelming the connection. Neither stage is CPU-bound, so a process pool would only have added serialization overhead.
+- **Resumable checkpointing keyed on real completion.** The orchestrator writes `_progress.json` after every project, and `is_done()` treats only `ok` and `no_atks` as truly complete. `discovery_failed`, `crashed`, and `orchestrator_crash` are all left to retry on the next `--resume`. A four-hour run that loses internet halfway just gets re-invoked with the same command.
+- **Presigned S3 URLs are fetched without the Bearer header.** The Swift file-metadata endpoint returns a presigned S3 URL that already carries auth in its query string. Sending the API's `Authorization` header along to S3 breaks the signature — so downloads go through a plain `requests.get()`, deliberately bypassing the authed client.
+- **One shared session, hardened against transient failure.** A single `requests.Session` with an `HTTPAdapter` pool of 50 lets all workers reuse TCP/TLS connections. Five-retry exponential backoff covers 502/503/504; a 401 after a long run triggers an automatic re-auth and one retry.
 
 ## Code Samples
 
-The two-pool split that did most of the work:
+The two IO-bound pools — scan fans out, downloads drain a queue:
 
 ```python
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from os import cpu_count
-
-def extract_all(message_ids: list[str]) -> list[Result]:
-    # Stage 1: parallel IO-bound fetch
-    with ThreadPoolExecutor(max_workers=16) as io_pool:
-        cached_paths = list(io_pool.map(fetch_to_cache, message_ids))
-
-    # Stage 2: parallel CPU-bound extract
-    with ProcessPoolExecutor(max_workers=cpu_count()) as cpu_pool:
-        return list(cpu_pool.map(extract_pdf, cached_paths))
+self.scan_pool = ThreadPoolExecutor(max_workers=scan_workers,  # default 32
+                                    thread_name_prefix="scan")
+self.dl_pool   = ThreadPoolExecutor(max_workers=dl_workers,    # default 16
+                                    thread_name_prefix="dl")
 ```
 
-Idempotent fetch — the cache key is the upstream id, no API call on hits:
+Presigned S3 fetched deliberately *without* the Bearer header:
 
 ```python
-def fetch_to_cache(message_id: str) -> Path:
-    path = CACHE_DIR / f"{message_id}.pdf"
-    if path.exists() and path.stat().st_size > 0:
-        return path
-    raw = mail_client.get_attachment(message_id)
-    path.write_bytes(raw)
-    return path
+presigned = meta.json().get("url")
+# Plain requests for S3 (presigned URL carries auth in query string).
+# Sending the API Authorization header here breaks the S3 signature.
+r = requests.get(presigned, stream=True, timeout=180)
+r.raise_for_status()
+with dest.open("wb") as f:
+    for chunk in r.iter_content(chunk_size=128 * 1024):
+        if chunk:
+            f.write(chunk)
 ```
 
-Text-layer-first extraction with OCR as the fallback path:
+Resume safety — only genuine completion counts as done:
 
 ```python
-def extract_pdf(path: Path) -> Result:
-    text = pdfplumber_extract(path)
-    if text.strip():
-        return parse_fields(text)
-    # Slow path: scanned PDF, fall back to OCR
-    return parse_fields(ocr_extract(path))
+# Anything else (discovery_failed, crashed, orchestrator_crash, ...) is
+# left to be retried on the next --resume run.
+_DONE_STATUSES = frozenset({"ok", "no_atks"})
+
+def is_done(self, project_did: str) -> bool:
+    entry = self.data["completed"].get(project_did)
+    return bool(entry) and entry.get("status") in self._DONE_STATUSES
+```
+
+The argparse gotcha that bit the most: Swift IDs start with `-`, which argparse reads as a flag.
+
+```bash
+# Wrong: argparse treats -LSLn... as an unknown option
+python run_org.py --org-did -LSLnbjcxlr7_LrWCzeH --out RFDS_TSC
+
+# Right: use = or the -- separator
+python run_org.py --org-did=-LSLnbjcxlr7_LrWCzeH --out RFDS_TSC --resume
 ```
 
 ## Metrics
 
-- **Throughput:** 0.5 → 38 attachments / second — a **76× speedup**
-- **Backlog clear:** ~2,000 attachments in under 1 minute (was 1+ hour)
-- **Memory:** flat under 500 MB regardless of inbox size (bounded queue)
-- **Cache hit rate:** ~95% on re-runs after parser updates
+From the first full org run (TSC Construction, 2026-04-28):
+
+- **83 projects scanned in 61.2 minutes**, at roughly **38 asset-tasks per second** through the scan pool.
+- **An internet outage hit the last ~25 minutes**, leaving 15 projects in `discovery_failed`. A `--resume` re-run retried exactly those 15 — resume safety meant the 64 already-`ok` projects were never re-fetched.
+- **Final result: 64 ok / 4 no_atks / 15 failed**, producing **2,866 PDFs totaling 3.4 GB** on disk in flat `<asset_id>__<filename>.pdf` layout.
 
 ## What I Learned
 
-- **Profile before parallelizing.** The intuition was "the whole thing is slow." The truth was "the extract step is CPU-bound and the fetch step is IO-bound, and they were sharing a single thread." Ten minutes of profiling clarified the pool choice that produced most of the speedup.
-- **Idempotent fetch is the secret of fast iteration.** Bug in the parser? Re-run, no API hits. Cache invalidation is hard in general; cache by a stable upstream id and it's free.
-- **Text-layer-first beats OCR-always.** OCR is roughly 50× slower than text-layer extraction. Tripling typical-case throughput became a one-line change once we knew which path to try first.
+- **Resumable checkpointing is what makes long, network-fragile runs survivable.** The single design choice that mattered most wasn't concurrency — it was that only true completion counts as done. Everything else retries. A real outage mid-run cost a re-invocation, not an hour.
+- **Presigned URLs are their own auth domain.** The most non-obvious bug was sending the API Bearer token to S3 and getting signature failures. Once you see that the presigned query string *is* the credential, dropping the header is obvious — but it costs an hour the first time.
+- **Match the pool to the bottleneck, not the instinct.** "Make it parallel" tempts you toward processes. Both stages here were waiting on the network, so threads were correct and processes would only have added cost. Knowing the workload shape before picking the pool is the whole game.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/swift-pdf-extractor) — open-source reference implementation lands W7 of the AI Engineer learning path.
+GitHub repo — the project moved to the work org and is now private. Open-source reference write-up is coming, slated for W7 of the AI Engineer learning path.

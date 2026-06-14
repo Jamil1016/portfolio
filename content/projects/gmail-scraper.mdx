@@ -1,84 +1,94 @@
 ## The Problem
 
-A team was using Gmail as a structured data channel — status updates and milestone reports landed there as HTML emails with a consistent (but evolving) format. They needed those fields to flow into the data warehouse and onto dashboards without anyone copy-pasting.
+A team was using Gmail as a structured-data channel. Close-out package status reports landed in the inbox as HTML emails — five distinct package types (landlord close-outs, standard close-outs, 48-hour reviews, package reviews, live reviews), each with its own field set, all evolving over time. Those fields needed to flow into the warehouse and onto dashboards without anyone copy-pasting.
 
-The trap: every parser written against email is one HTML template change away from breaking. The solution had to absorb format drift without code changes for new fields.
+The trap: every parser written against email is one template change away from breaking. The HTML wasn't clean either — the sender embedded zero-size tracking spans that fractured words mid-token when extracted. The solution had to absorb format drift without code changes for new fields, and survive HTML that actively fought the parser.
 
 ## Architecture
 
 <MermaidDiagram>{`
 graph LR
-  G[Gmail API] -->|incremental<br/>via historyId| F[Message fetcher]
-  F --> P[BeautifulSoup<br/>parse]
-  P --> H[Ordered header<br/>pattern match]
-  H --> J[Field extractor<br/>→ JSONB]
+  G[Gmail API] -->|incremental<br/>after: last received| F[Message fetcher]
+  F --> R[(raw_emails<br/>+ stg_emails)]
+  R --> P[BeautifulSoup<br/>parse + clean]
+  P --> H[Ordered header<br/>classify]
+  H --> J[Label:value<br/>extractor → JSONB]
   J --> U[Upsert by<br/>message_id]
-  U --> D[(Postgres<br/>JSONB column)]
+  U --> D[(stg_package_emails<br/>JSONB fields)]
+  D -.->|rolling append| S[Google Sheet]
 `}</MermaidDiagram>
 
-The fetcher uses Gmail's incremental sync — only messages newer than the last seen `historyId` get processed. Each message gets parsed with BeautifulSoup, hidden tracking spans are stripped, and an ordered list of header patterns identifies which message type it is (this ordering matters — substring matches need the longer pattern checked first). The parser walks key-value sections of the email, stuffing whatever it finds into a JSONB column. Duplicate suppression is at the database via `ON CONFLICT (message_id) DO NOTHING`.
+Scraping and parsing are two separable stages writing to two tables. The scraper does incremental fetch — it reads `MAX(received_at)` from the warehouse and appends an `after:` filter to the Gmail query, so only newer mail gets pulled. Raw headers plus the full HTML body land in `data_raw.raw_emails` and `data_staging.stg_emails`.
+
+The parser reads those bodies separately. It strips hidden tracking spans, finds the package header, walks the containing table extracting every label:value pair into a JSONB `fields` column, and writes `data_staging.stg_package_emails`. Because parsing is decoupled from scraping, a parser improvement can be re-applied to the entire history without re-fetching a single email from Gmail.
 
 ## Key Decisions
 
-- **JSONB over fixed columns.** New fields appear in emails all the time. JSONB absorbs them without migrations — Excel exports auto-discover columns from the union of all keys.
-- **Ordered header pattern list.** "Landlord Close Out Package" and "Close Out Package" both exist; the longer pattern must be matched first or every landlord email gets misclassified.
-- **Hidden-span stripping with word rejoin.** Tracking pixels live inside zero-width `<span>` elements that BeautifulSoup's `get_text()` joins with spaces — breaking words like "Construction" into "C onstruction". A regex post-pass rejoins single uppercase letters back to the next word.
-- **Idempotent upserts by message_id.** Gmail's `message_id` is stable across re-runs. `ON CONFLICT DO NOTHING` makes re-processing free.
+- **JSONB over fixed columns.** Five package types with overlapping-but-different fields, and the templates change. JSONB absorbs new fields without migrations — the Sheets export carries the known columns and rolls any unrecognized keys into a single `Other Fields (JSON)` column, so a new field never breaks the export.
+- **Ordered header classification.** `LANDLORD CLOSE OUT PACKAGE` contains `CLOSE OUT PACKAGE` as a substring. The patterns are checked longest-first, so a landlord email is never misclassified as a generic close-out.
+- **Hidden-span stripping with artifact repair.** The sender hides hash IDs inside `font-size:0/0pt/1pt` spans. Decomposing them is step one; step two repairs the damage left behind — `get_text(" ")` had split `Construction` into `C onstruction` and a hidden-span hash had eaten the `LA` off `LANDLORD`, leaving `NDLORD`. Both are repaired with targeted regex.
+- **Re-parse without re-fetch.** The parser upserts with `ON CONFLICT (message_id) DO UPDATE`, refreshing `fields` and stamping `parsed_at = NOW()` — *not* `DO NOTHING`. Improving the parser and re-running re-applies to every stored email without touching the Gmail API. The scrape stage stays `DO NOTHING`; the parse stage is the one that re-derives.
 
 ## Code Samples
 
-Header pattern matching with ordering to disambiguate prefixes:
+Ordered header patterns — longest prefix first so landlord packages never collapse into the generic bucket:
 
 ```python
-# Order matters — longer/more-specific patterns first
-HEADER_PATTERNS = [
-    ("landlord_closeout", re.compile(r"LANDLORD\s+CLOSE\s+OUT\s+PACKAGE", re.I)),
-    ("closeout",          re.compile(r"CLOSE\s+OUT\s+PACKAGE",            re.I)),
-    ("revision",          re.compile(r"REVISION\s+PACKAGE",               re.I)),
-    ("review",            re.compile(r"REVIEW\s+PACKAGE",                 re.I)),
+# Header patterns to detect structured package tables (checked in order)
+_HEADER_PATTERNS = [
+    "LANDLORD CLOSE OUT PACKAGE",  # must be before generic COP
+    "CLOSE OUT PACKAGE",           # COP REVIEW, COP REVISION, PMI
+    "48 HOUR PACKAGE",             # 48Hr reviews
+    "PACKAGE REVIEW",              # catch-all for other package types
+    "LIVE REVIEW",                 # in-progress live review
 ]
-
-def classify(text: str) -> str | None:
-    for kind, pattern in HEADER_PATTERNS:
-        if pattern.search(text):
-            return kind
-    return None
 ```
 
-Hidden-span removal that doesn't break word boundaries:
+Hidden-span removal, then repair of the damage it leaves behind:
 
 ```python
-def clean_html(html: str) -> str:
-    soup = BeautifulSoup(html, "html.parser")
-    # Remove zero-width tracking spans entirely
-    for span in soup.find_all("span", style=re.compile(r"font-size:\s*[01]p?[tx]?")):
-        span.decompose()
-    text = soup.get_text(" ", strip=True)
-    # Rejoin single uppercase letters that BeautifulSoup split apart
-    text = re.sub(r"\b([A-Z])\s([a-z])", r"\1\2", text)
-    return text
+# Remove tiny-font hidden spans (hash IDs use 0/0pt/1pt font-size)
+for span in soup.find_all("span", style=lambda s: s and re.search(
+    r"font-size:\s*(?:0(?:px|pt|%)?|1pt)\b", s
+)):
+    span.decompose()
+
+# Repair span-removal artifact: a hidden hash ate the leading "LA"
+if t.startswith('NDLORD CLOSE OUT PACKAGE'):
+    t = 'LA' + t
+
+# Rejoin labels split by get_text: "C onstruction Engineer" -> "Construction…"
+label = re.sub(r'\b([A-Z]) ([a-z])', r'\1\2', label)
 ```
 
-Idempotent JSONB upsert — re-running is free:
+Re-parseable upsert — improvements re-apply to stored mail without re-scraping:
 
 ```sql
-insert into stg_messages (message_id, thread_id, kind, fields, received_at)
-values (%s, %s, %s, %s, %s)
-on conflict (message_id) do nothing;
+INSERT INTO data_staging.stg_package_emails
+    (message_id, package_type, fields, dropbox_url, swift_url, parse_error)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (message_id) DO UPDATE SET
+    package_type = EXCLUDED.package_type,
+    fields       = EXCLUDED.fields,
+    dropbox_url  = EXCLUDED.dropbox_url,
+    swift_url    = EXCLUDED.swift_url,
+    parse_error  = EXCLUDED.parse_error,
+    parsed_at    = NOW();
 ```
 
 ## Metrics
 
-- **Throughput:** thousands of messages per day, near-real-time
-- **End-to-end lag:** under 5 minutes from email arrival to row in warehouse
-- **Schema drift events** absorbed without code changes — new fields appear in JSONB and Excel exports the next run
-- **Reprocessing cost:** zero — full historical re-run is idempotent
+- **Five package header types** classified in priority order into a single JSONB `fields` column — no schema change when a new field appears.
+- **Incremental fetch** keyed on `MAX(received_at)`; fetch ceiling raised from 2,000 to 10,000 results per run.
+- **Continuous scheduling** — moved off a single nightly GitHub Action (04:00 UTC) to an Apps Script trigger firing roughly every five minutes during business hours, with optional rolling Google Sheet output.
+- **Re-parse cost is decoupled from Gmail.** Parser fixes re-apply across the full stored corpus without re-fetching.
+- **Known parser gap (pinned 2026-06-02):** `cop_revision` emails frequently drop dates — 3,834 rows over a 60-day window carried a null `cop_complete`. The gap is upstream of the date-validator and tracked openly rather than papered over.
 
 ## What I Learned
 
-- **Email parsers fail at the smallest scale.** Hidden tracking pixels and one-character split-spans break parsers in ways unit tests rarely catch. Visual diff against actual messages is the only way to find them.
-- **Dynamic schemas are a feature, not infrastructure.** Picking JSONB upfront let the team add fields by editing the email template, not the parser. The team owns their own data shape.
-- **Idempotent by default.** Every pipeline I'd build now starts from this constraint. Re-runnable, replayable, debug-friendly. Cost: maybe 10% more thinking up front. Benefit: months of operational ease.
+- **Email parsers fail at the smallest scale.** A zero-size span isn't visible, isn't in your test fixtures, and silently splits one word into two. The only way to find these is to diff parsed output against the rendered message and chase the one-character anomalies.
+- **Separating scrape from parse pays for itself.** Because the expensive, rate-limited stage (Gmail) and the iterate-heavy stage (parsing) write to different tables, every parser experiment runs against stored HTML for free. That single boundary turned parser tuning from a network-bound chore into a tight local loop.
+- **Dynamic schemas are a feature, not infrastructure.** Choosing JSONB up front let the team add fields by editing the email template, not the parser. They own their own data shape.
 
 ## Links
 

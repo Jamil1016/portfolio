@@ -4,15 +4,27 @@ import { GITHUB_URL } from "@/lib/site-data";
 // Real build-status board (replaces the mockup's fabricated nightly run table).
 // Every row is a real project from lib/projects.ts.
 function SystemsPanel() {
-  const live = projects.filter((p) => p.publicRepoStatus === "live").length;
-  const shipping = projects.length - live;
+  const inProd = projects.filter((p) => p.prod === "production").length;
+  const proto = projects.length - inProd;
+
+  const rows = (keyPrefix: string) =>
+    projects.map((p) => {
+      const live = p.prod === "production";
+      return (
+        <div className="run-row" key={`${keyPrefix}-${p.slug}`}>
+          <span className="r-name">{p.name}</span>
+          <span className="r-meta">{p.stack.slice(0, 2).join(" · ")}</span>
+          <span className={live ? "r-st" : "r-st coming"}>{live ? "● prod" : "proto"}</span>
+        </div>
+      );
+    });
 
   return (
     <div className="run" data-screen-label="Build status">
       <div className="run-head">
         <span className="t">Build status</span>
         <span className="ok">
-          ● {live} live · {shipping} shipping
+          ● {inProd} in production · {proto} prototype
         </span>
       </div>
       <div className="run-cols">
@@ -21,18 +33,13 @@ function SystemsPanel() {
         <span>status</span>
       </div>
       <div className="run-body">
-        {projects.map((p) => {
-          const isLive = p.publicRepoStatus === "live";
-          return (
-            <div className="run-row" key={p.slug}>
-              <span className="r-name">{p.name}</span>
-              <span className="r-meta">{p.stack.slice(0, 2).join(" · ")}</span>
-              <span className={isLive ? "r-st" : "r-st coming"}>
-                {isLive ? "● live" : `OSS · ${p.publicEtaWeek}`}
-              </span>
-            </div>
-          );
-        })}
+        {/* Auto-scrolling live feed; duplicated for a seamless loop, paused on hover. */}
+        <div className="run-track">
+          <div className="run-seg">{rows("a")}</div>
+          <div className="run-seg" aria-hidden="true">
+            {rows("b")}
+          </div>
+        </div>
       </div>
     </div>
   );
