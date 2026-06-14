@@ -15,6 +15,10 @@ export type WeekRow = {
   status: "not_started" | "in_progress" | "done";
   notes: string | null;
   artifact_url: string | null;
+  objectives: string | null;
+  success_metric: string | null;
+  data_source: string | null;
+  playbook_path: string | null;
 };
 
 export function WeekCard({ week }: { week: WeekRow }) {
@@ -57,8 +61,42 @@ export function WeekCard({ week }: { week: WeekRow }) {
       {week.time_estimate && (
         <p className="mt-2 text-xs text-slate-500">Time estimate · {week.time_estimate}</p>
       )}
+      {(week.objectives || week.success_metric || week.data_source) && (
+        <dl className="mt-3 space-y-1.5 text-sm">
+          {week.objectives && (
+            <div className="flex gap-2">
+              <dt className="shrink-0 font-mono text-xs uppercase text-emerald-500/80">Learn</dt>
+              <dd className="text-slate-300">{week.objectives}</dd>
+            </div>
+          )}
+          {week.success_metric && (
+            <div className="flex gap-2">
+              <dt className="shrink-0 font-mono text-xs uppercase text-amber-500/80">Measure</dt>
+              <dd className="text-slate-300">{week.success_metric}</dd>
+            </div>
+          )}
+          {week.data_source && (
+            <div className="flex gap-2">
+              <dt className="shrink-0 font-mono text-xs uppercase text-sky-500/80">Data</dt>
+              <dd className="text-slate-300">{week.data_source}</dd>
+            </div>
+          )}
+        </dl>
+      )}
       {week.apply_action && (
-        <p className="mt-3 text-sm text-slate-300">{week.apply_action}</p>
+        <p className="mt-2 text-sm text-slate-400">
+          <span className="font-mono text-xs uppercase text-slate-500">Ships</span> · {week.apply_action}
+        </p>
+      )}
+      {week.playbook_path && (
+        <a
+          href={`https://github.com/Jamil1016/portfolio/blob/main/${week.playbook_path}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-block text-xs text-emerald-400 hover:text-emerald-300"
+        >
+          Full build steps →
+        </a>
       )}
 
       <div className="mt-4 flex gap-2">

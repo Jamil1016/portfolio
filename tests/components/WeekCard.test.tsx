@@ -19,6 +19,10 @@ describe("WeekCard", () => {
     status: "not_started" as const,
     notes: null,
     artifact_url: null,
+    objectives: null,
+    success_metric: null,
+    data_source: null,
+    playbook_path: null,
   };
 
   it("renders week label, course title, and status badge", () => {
@@ -32,5 +36,20 @@ describe("WeekCard", () => {
     render(<WeekCard week={week} />);
     expect(screen.getByText(/~6 hrs/)).toBeInTheDocument();
     expect(screen.getByText(/Rewrite DARA/)).toBeInTheDocument();
+  });
+
+  it("renders learn objectives, success metric, data source, and playbook link", () => {
+    const enriched = {
+      ...week,
+      objectives: "Messages API; tool use; streaming",
+      success_metric: "1 DARA call ported, eval ≥ baseline",
+      data_source: "DARA prod prompt log",
+      playbook_path: "docs/roadmap/phase-0.md#week-0c",
+    };
+    render(<WeekCard week={enriched} />);
+    expect(screen.getByText(/Messages API/)).toBeInTheDocument();
+    expect(screen.getByText(/eval ≥ baseline/)).toBeInTheDocument();
+    expect(screen.getByText(/DARA prod prompt log/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /build steps/i })).toBeInTheDocument();
   });
 });
