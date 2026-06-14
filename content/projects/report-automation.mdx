@@ -1,111 +1,95 @@
 ## The Problem
 
-A business team wanted a daily report emailed every weekday morning with the prior day's activity summary. The report needed to be visually rich (charts inline, not just tables), skip weekends and holidays, and survive multi-month operation without human intervention.
+A business team needed recurring finance and compliance reports delivered automatically, visually rich (real charts, not just tables), gated to the right days, and reliable enough to run for months without a human babysitting them. A missed report meant a manual scramble to reconstruct numbers.
 
-Reliability was the main constraint — a missed report meant a manual scramble to reconstruct numbers. So the system had to be triggered by something more reliable than a cron timer and be idempotent enough that re-running it produced an identical report.
+It grew into a four-report suite in one monorepo: a **daily finance report** (built every weekday but emailed only Mon/Wed/Fri), a **weekly compliance audit** (Fridays), an **open-items report** (event-driven, split per carrier with Excel + PDF delivered to per-carrier Google Drive folders), and a **final-cop-pending** prototype. Reliability was the constraint — so each report is triggered by something more dependable than a bare cron timer, and re-running one produces an identical artifact.
 
 ## Architecture
 
 <MermaidDiagram>{`
 graph LR
-  G[Google Apps Script<br/>time trigger] --> D[repository_dispatch]
-  D --> A[GitHub Actions<br/>workflow]
-  A --> W{is_weekend?<br/>holiday?}
-  W -->|no| P[Python generator]
-  W -->|yes| S[Skip + log]
-  P --> Q[Supabase<br/>analytics query]
-  Q --> C[Render charts<br/>matplotlib + Chart.js]
-  C --> H[Build HTML email]
-  H --> M[SMTP send]
+  AS[Google Apps Script<br/>time trigger] --> RD[repository_dispatch]
+  RD --> GHA[GitHub Actions<br/>workflow]
+  GHA --> W{weekend?<br/>Mon/Wed/Fri DOW?}
+  W -->|skip| SK[Log + exit]
+  W -->|run| B[Build report<br/>query Supabase views]
+  B --> C[Chart.js 4.4 in HTML<br/>render via Playwright Chromium]
+  C --> PDF[PDF]
+  PDF --> GM[Gmail API send]
+  PDF --> DR[Google Drive<br/>per-carrier folders<br/>open-items only]
 `}</MermaidDiagram>
 
-A Google Apps Script time-trigger fires at the scheduled hour and posts a `repository_dispatch` event to GitHub. The receiving workflow checks `is_weekend()` and a holiday list — both gates apply identically regardless of the trigger source, so manual re-runs respect them too. If the day is a workday, the Python generator queries analytics views, renders charts to base64-encoded PNGs (matplotlib for the static ones, Chart.js for the interactive web version), assembles an HTML email, and ships via SMTP.
+A Google Apps Script time-trigger fires and posts a `repository_dispatch` to GitHub (the open-items report is instead chained off the upstream `local-pipeline` data refresh, so its email never goes out with stale data). The receiving workflow applies a weekend check and, for daily finance, a Mon/Wed/Fri day-of-week gate — both evaluated in Eastern time so they behave the same whether the trigger fired the workflow or someone ran it manually. On a sending day the Python generator queries read-only Supabase analytics views (asyncpg + psycopg2), renders Chart.js 4.4 charts inside an HTML page that Playwright headless Chromium prints to PDF, and ships via the Gmail API. Open-items additionally writes per-carrier Excel + PDF to dated Drive sub-folders and shares the folder links in the email body.
 
 ## Key Decisions
 
-- **Apps Script triggers over GitHub Actions cron.** GHA cron drifts and silently skips. Apps Script triggers fire reliably to the minute. Cost: one extra hop. Benefit: months of uninterrupted delivery.
-- **`is_weekend()` gate at the workflow, not the trigger.** Same logic runs whether the workflow was fired by the trigger or by manual dispatch. One source of truth.
-- **Idempotent generator.** Running twice produces the same email. Re-runs are free. Operations love this property.
-- **Inline-base64 charts, not attachments.** Some mail clients hide attachments by default. Inline PNGs always render.
+- **Apps Script / event-driven triggers over GitHub Actions cron.** GHA cron drifts and silently skips. Apps Script time-triggers fire reliably, and the open-items report goes one better — it's dispatched by the upstream data pipeline's end-of-run, so the report can't beat its own data.
+- **Day-of-week gate at the workflow, not the trigger.** The Mon/Wed/Fri (`{0, 2, 4}`) gate and weekend check run inside the job, in Eastern time, so a manual `workflow_dispatch` respects the same rules as the scheduled trigger. One source of truth.
+- **Chart.js rendered to PDF via Playwright, not matplotlib.** Bundling Chart.js locally and printing the page with headless Chromium gives crisp, web-quality charts in the PDF and reuses the exact same rendering the HTML email uses. Base64 is used only to embed the logo.
+- **Gmail API, not SMTP.** A shared OAuth token (`build_gmail_service()` / `send_email()`) sends from the notifier account — no SMTP credentials to rotate, and the same token builds the Drive service for open-items uploads.
+- **Freshness guard + retries.** Reports refuse to email a stale snapshot, and `_connect_with_retry` rides out transient pooler hiccups with exponential backoff.
 
 ## Code Samples
 
-Single source of truth for weekday gating — used by every trigger source:
+Weekend check plus the Mon/Wed/Fri day-of-week gate, evaluated in Eastern time so manual runs obey the same rules:
 
 ```python
-def is_weekend(d: date) -> bool:
-    return d.weekday() >= 5  # 5=Sat, 6=Sun
+def is_weekend(iso_date: str) -> bool:
+    """True if 'YYYY-MM-DD' falls on Saturday or Sunday."""
+    return date.fromisoformat(iso_date[:10]).weekday() >= 5
 
-HOLIDAYS_2026 = {
-    date(2026, 1, 1),   # New Year's
-    date(2026, 5, 26),  # Memorial Day
-    date(2026, 7, 4),
-    # ...
-}
+_now_et = datetime.now(ZoneInfo("America/New_York"))
+_EMAIL_ALLOWED_DOW = {0, 2, 4}   # Mon, Wed, Fri. Change cadence here.
 
-def should_run(d: date) -> tuple[bool, str]:
-    if is_weekend(d):
-        return False, "weekend"
-    if d in HOLIDAYS_2026:
-        return False, "holiday"
-    return True, "workday"
+if args.force_send:
+    print(f"--force-send: bypassing DOW gate (today is {_now_et:%A}).")
+elif _now_et.weekday() not in _EMAIL_ALLOWED_DOW:
+    print(f"Skipping send_email: today is {_now_et:%A}; allowed only Mon/Wed/Fri. "
+          f"Report HTML + PDF already built and uploaded to Drive.")
+    return
 ```
 
-Idempotent generator — running twice on the same date produces the same email:
+Gmail API send — a shared OAuth token, no SMTP:
 
 ```python
-def generate(report_date: date) -> bytes:
-    # Pull from analytics views (read-only)
-    summary = db.fetchrow(SUMMARY_QUERY, report_date)
-    breakdown = db.fetch(BREAKDOWN_QUERY, report_date)
+def build_gmail_service(credentials_dir: Path):
+    return build("gmail", "v1", credentials=_load_creds(credentials_dir))
 
-    # Charts encoded as base64 PNGs — deterministic with a fixed style
-    summary_chart = render_chart(summary, style="static")
-    breakdown_chart = render_chart(breakdown, style="static")
-
-    return render_email_html(
-        report_date=report_date,
-        summary=summary,
-        breakdown=breakdown,
-        charts=[summary_chart, breakdown_chart],
-    )
+def send_email(*, body_html, attachments, recipients, service, ...):
+    msg = EmailMessage()
+    msg["To"] = ", ".join(recipients)
+    msg.add_alternative(body_html, subtype="html")   # inline-CSS, Gmail/Outlook safe
+    for att in attachments:
+        ...                                            # xlsx / pdf attachments
+    raw = base64.urlsafe_b64encode(msg.as_string().encode()).decode()
+    service.users().messages().send(userId="me", body={"raw": raw}).execute()
 ```
 
-Apps Script trigger that calls GHA — the entire glue between schedule and workflow:
+Connection with exponential backoff so a single transient pooler blip doesn't fail the run:
 
-```javascript
-function fireDailyReport() {
-  const payload = {
-    event_type: "daily_report",
-    client_payload: { date: Utilities.formatDate(new Date(), "GMT", "yyyy-MM-dd") }
-  };
-  UrlFetchApp.fetch(
-    "https://api.github.com/repos/<org>/<repo>/dispatches",
-    {
-      method: "post",
-      headers: {
-        "Authorization": "token " + PropertiesService.getScriptProperties().getProperty("GH_PAT"),
-        "Accept": "application/vnd.github+json"
-      },
-      contentType: "application/json",
-      payload: JSON.stringify(payload),
-    }
-  );
-}
+```python
+def _connect_with_retry(url, attempts=3, backoff=2.0):
+    for i in range(attempts):
+        try:
+            return psycopg2.connect(url, connect_timeout=30)
+        except psycopg2.OperationalError:
+            if i == attempts - 1:
+                raise
+            time.sleep(backoff ** i)
 ```
 
 ## Metrics
 
-- **End-to-end delivery time:** under 90 seconds from trigger to inbox
-- **Streak:** multi-month uninterrupted weekday delivery, zero misses
-- **Re-run cost:** zero — identical input produces identical email, mail clients dedupe
-- **Holiday gates:** triggered correctly on every US federal holiday in the calendar
+- **Delivery latency:** ~5–15 minutes trigger-to-inbox (dominated by Apps Script poll interval + GHA cold start + Playwright Chromium on a cache miss).
+- **Daily finance run:** ~4 minutes end to end.
+- **Suite:** 4 subprojects; open-items split across 3 carriers (VZW / ATT / TMO) into per-carrier Drive folders.
+- **Tests:** ~12 unit tests plus golden snapshots (smoke + freshness-guard boundaries, email body, subject lines).
 
 ## What I Learned
 
-- **Treat GHA cron as best-effort, not reliable.** Anything that has to fire on time gets a real trigger source. Apps Script, AWS EventBridge, anything but cron.
-- **Idempotent generators unlock cheap operations.** Running the report twice should be safe. Once you build that property in, you stop fearing re-runs forever.
-- **One gate, every trigger source.** `should_run()` is called by the scheduled trigger AND the manual dispatch AND any future webhook. Don't duplicate the logic per entry point.
+- **Treat GHA cron as best-effort, not reliable.** Anything that has to fire on time gets a real trigger source — an Apps Script time-trigger, or, better, the upstream data pipeline's completion event so the report can't run ahead of its data.
+- **Gate at the workflow, never per entry point.** The weekend + DOW logic runs once inside the job, in Eastern time, so scheduled runs, manual dispatches, and any future webhook all obey the same rules with zero duplication.
+- **Render charts the way the web does.** Bundling Chart.js and printing with Playwright Chromium gave better-looking PDFs than a separate static-chart library and kept email and PDF visually identical — months of monitored operation with clean recovery on transient failures.
 
 ## Links
 

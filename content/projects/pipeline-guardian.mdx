@@ -1,102 +1,108 @@
 ## The Problem
 
-Nightly ETL failures left orphaned data and blocked the next run. Triage at 2 AM was unsustainable: the on-call person had to identify the failure class, find the affected rows, run a specific cleanup script, then re-trigger the failed step. Most failures were a small set of recurring patterns — exactly the kind of thing an agent should handle.
+A set of nightly ETL pipelines failed in a small number of recurring ways: stale rows left in a raw table after a crashed run, a run stuck in `running` because the process died before writing status, an orphaned index from a half-finished recreate, transient DNS and upstream-API blips. When one failed, the originating manual incident took roughly 40 minutes to triage and fix by hand, and across the fleet this happened two or three times a week. Some failures were safe to fix mechanically; some needed a judgment call; and some were genuine code or auth bugs that no automation should touch.
 
-The system needed to act safely on production data, never destroy anything irreversibly, and prove (with replayable evals) that prompt changes didn't regress behavior.
+I seeded the design from real history — 53 failed runs and 12 stuck runs pulled from the run log — and the shape was clear: most incidents were the same handful of patterns, and the right response depended entirely on *which* pattern. So the system isn't one autonomous fixer. It's a router that sorts each failure into one of three tiers and acts accordingly: fix it silently, ask me first over email, or get out of the way and escalate.
 
 ## Architecture
 
+Three triggers feed the agent, all arriving as GitHub `repository_dispatch` events fired by a Google Apps Script bridge. A severity router sends each detection down one of three paths, and every transition is recorded in a Postgres state machine.
+
 <MermaidDiagram>{`
-graph LR
-  A[ETL failure signal] --> B[Guardian<br/>orchestrator]
-  B --> C{Failure class<br/>recognized?}
-  C -->|yes| D[Claude<br/>+ runbook context]
-  D --> E[Structured<br/>tool call]
-  E --> F{Deterministic<br/>safety gate}
-  F -->|pass| G[Apply fix]
-  F -->|fail| H[Alert human]
-  C -->|no| H
-  G --> I[Verify + audit log]
+graph TD
+  T1[Pipeline failure email] -->|guardian-failure| AG[Guardian agent<br/>GitHub Actions]
+  T2[5-min time trigger] -->|guardian-periodic| AG
+  T3[Email reply] -->|guardian-reply| AG
+  AG --> CL{Classify against<br/>known_issues.yaml}
+  CL --> R{Severity}
+  R -->|auto| AF[Auto-fix<br/>schema-guarded SQL]
+  R -->|approve| AP[Email me<br/>await reply]
+  R -->|escalate| ES[Escalate<br/>no action]
+  AP --> RP[Claude classifies reply:<br/>approve / decline / modify / instruct]
+  RP --> AF
+  AF --> SS[(agent.monitor_state<br/>Postgres state machine)]
+  AP --> SS
+  ES --> SS
 `}</MermaidDiagram>
 
-Each failure type has a runbook entry: what it looks like, what the fix is, what to verify after. The orchestrator matches the failure to a runbook, builds a prompt with the runbook context, and gives Claude a single structured tool to call (`apply_remediation` with constrained arguments). Before the tool's effect runs against production, a deterministic guard re-checks the precondition — the LLM is allowed to *propose* the fix, but not to bypass the check.
+Detection is driven by an 18-pattern YAML knowledge base (`known_issues/known_issues.yaml`): 5 `auto`, 6 `approve`, 7 `escalate`, plus 7 pipeline schedules used for missing-run detection. The YAML is the source of truth — a one-way sync (`sync_known_issues.py`) seeds `agent.known_issues` and `agent.pipeline_schedule`. Adding a pattern is a YAML edit plus a sync, with no code redeploy.
+
+The `periodic` trigger also runs on a cron-style cadence to catch what no failure email reports: runs stuck in `running` past a threshold, scheduled runs that never started (each pipeline has an expected cron plus a grace window), and approvals that have sat unanswered for over 12 hours.
 
 ## Key Decisions
 
-- **Security: the minimal tool surface is the whole security posture.** Constraining the LLM to a fixed set of typed function calls eliminates entire attack classes upstream — no SQL string injection, no shell escape, no arbitrary action surface. The deterministic precondition guard then ensures the LLM is never the final authority on a destructive operation.
-- **Structured tools, never free-form actions.** Each remediation is a fixed-signature function with typed arguments. The LLM picks one and fills in args. No SQL strings, no shell commands.
-- **Deterministic safety gate around every destructive call.** Even after the LLM picks the right tool, code re-validates the precondition before applying. The LLM is never the last check.
-- **Dry-run mode is the default.** The agent describes what it would do without doing it. Apply mode is a separate explicit flag.
-- **Golden-set evals before every prompt change.** A library of past failures with their correct remediations runs on every PR. Prompt drift gets caught before deploy.
+- **A three-tier router, not a single autonomous agent.** The severity tier lives in the knowledge base, not in model output. `auto` patterns (e.g. `stale_runs_in_raw_table`, `stuck_running_status`, `index_already_exists`, `dns_blip_at_startup`, `swift_api_503_transient`) run unattended. `approve` patterns email me a proposed action and wait. `escalate` patterns take no action at all. The model never decides its own authority level.
+- **The schema allowlist is the security posture.** Every SQL action passes through `_check_schema_whitelist`: an allowlist of the five schemas the agent owns (`agent, data_raw, data_staging, analytics, pipeline`), an explicit blocklist (`public, auth, storage`, …), and a regex guard that only lets index drops touch `idx_raw_*` names. The agent structurally cannot touch tables it doesn't own.
+- **Intent maps to fixed functions — reply text is never evaluated.** Email approvals are conversational: Claude Haiku classifies a reply into one of four intents, but each intent dispatches to a pre-defined function with typed arguments. Free-text instructions ride along as an opaque payload string; they never widen the action surface. Prompt injection in a reply can't make the agent do something the knowledge base didn't already allow.
+- **Dry-run is a first-class mode.** `GUARDIAN_DRY_RUN` makes every action log its intent and count affected rows without mutating anything; the manual GHA dispatch defaults to dry-run, and only the Apps Script bridge runs live.
+- **Guardrails against runaway behavior.** A kill-switch row in `agent.monitor_state` halts all action immediately; a rate limiter caps automated re-runs at 3 per pipeline per 24h (and escalates instead once hit); pending approvals get a reminder after 12h.
 
 ## Code Samples
 
-Structured tool definition that constrains what the LLM can do:
+The schema allowlist guard — the whole security model in one function. Any SQL touching a schema the agent doesn't own raises before it can execute:
 
 ```python
-APPLY_REMEDIATION = {
-    "name": "apply_remediation",
-    "description": "Apply a known remediation to a recognized failure class.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "failure_class": {
-                "type": "string",
-                "enum": ["orphaned_baseline", "stuck_lock", "stale_watermark"],
-            },
-            "affected_run_id": {"type": "string"},
-            "rationale": {"type": "string"},
-        },
-        "required": ["failure_class", "affected_run_id", "rationale"],
-    },
-}
+_ALLOWED_SCHEMAS = frozenset({
+    "agent", "data_raw", "data_staging", "analytics", "pipeline",
+})
+_BLOCKED_SCHEMAS = frozenset({
+    "public", "auth", "storage", "realtime", ...
+})
+
+def _check_schema_whitelist(sql: str) -> None:
+    """Raise PermissionError if SQL references any non-allowed schema."""
+    references = re.findall(
+        r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\.\s*[a-zA-Z_][a-zA-Z0-9_]*", sql
+    )
+    for schema in references:
+        schema_lower = schema.lower()
+        if schema_lower in _BLOCKED_SCHEMAS:
+            raise PermissionError(f"SQL references blocked schema '{schema_lower}'.")
+        if schema_lower not in _ALLOWED_SCHEMAS:
+            raise PermissionError(f"SQL references unknown schema '{schema_lower}'.")
 ```
 
-Deterministic guard that runs after the LLM picks its action but before the action lands:
+Reply classification — Claude sorts a free-text email reply into one of four fixed intents. The output is structured JSON and validated against an allowlist before anything dispatches:
 
 ```python
-def apply_with_guard(failure_class: str, run_id: str) -> str:
-    # LLM has selected a remediation — re-verify the precondition deterministically
-    rows = db.fetch_failure_signature(run_id)
-    expected = REMEDIATION_REGISTRY[failure_class].expected_signature
-    if not signature_matches(rows, expected):
-        return "BLOCKED: precondition not met; alerting human"
-    REMEDIATION_REGISTRY[failure_class].apply(run_id)
-    audit_log.write(failure_class, run_id, "APPLIED")
-    return "APPLIED"
+VALID_INTENTS = {"approve", "decline", "modify", "instruct"}
+
+def classify_intent(reply_text: str, pending_action: dict) -> dict:
+    """Classify a single reply against a pending action."""
+    client = Anthropic(api_key=api_key)
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=500,
+        system=SYSTEM_PROMPT,  # defines approve/decline/modify/instruct
+        messages=[{"role": "user", "content": user_msg}],
+    )
+    parsed = json.loads(resp.content[0].text.strip())
+    if parsed.get("intent") not in VALID_INTENTS:
+        raise ValueError(f"Invalid intent from Claude: {parsed.get('intent')!r}")
+    return parsed  # {"intent", "instructions", "confidence"}
 ```
 
-Eval harness running a golden set against the current prompt before every change:
-
-```python
-def run_golden_evals(prompt: str) -> list[EvalResult]:
-    results = []
-    for case in GOLDEN_SET:  # past incidents with known correct remediations
-        decision = agent.decide(prompt, case.failure_signal)
-        results.append(
-            EvalResult(
-                case_id=case.id,
-                expected=case.expected_remediation,
-                actual=decision.failure_class,
-                passed=decision.failure_class == case.expected_remediation,
-            )
-        )
-    return results
-```
+`handle_reply` then transitions the detection through `approved → executed`, and the intent selects a fixed function (`trigger_gha_workflow`, `clean_stale_runs`, `mark_stuck_failed`, …) — never an arbitrary action derived from the reply.
 
 ## Metrics
 
-- **Recurring failure classes** auto-remediated within 5 minutes of detection
-- **MTTR** cut by an order of magnitude on the targeted incident type
-- **On-call interrupts** for the targeted class dropped from multiple per week to near-zero
-- **Eval coverage** ≥ 90% of historical incidents in the golden set
+These are the verifiable facts about the system, not measured outcomes:
+
+- **18 patterns** in the knowledge base: **5 auto-fix, 6 approve, 7 escalate**
+- **7 pipeline schedules** driving missing-run detection
+- **4 reply intents** (approve / decline / modify / instruct), Haiku-classified
+- **5 schemas** on the SQL allowlist; index drops constrained to `idx_raw_*`
+- **20 unit tests** across detectors, actions, state store, schedule check, and the email parser
+- **3 trigger modes** (`failure`, `periodic`, `reply`) and an **8-state** machine in `agent.monitor_state`
+
+Design context (motivation, not outcomes): seeded from 53 historical failed runs and 12 stuck runs; the originating manual incident took ~40 minutes; manual interventions ran ~2–3×/week.
 
 ## What I Learned
 
-- **Constrained tool surfaces beat free-form LLM control for safety-critical systems.** Letting the model emit SQL or shell strings is asking for production scars. Tools with typed args + deterministic guards keep the model useful and the system safe.
-- **Eval-first prompt engineering is the only way to iterate without regressing.** Every prompt change runs the golden set first. Faster than tribal knowledge, more rigorous than "looks right to me."
-- **Dry-run as the default makes adopters trust the system.** People let it loose much faster when its first move is always "here's what I'd do, want me to do it?"
+- **Tiering by knowledge-base entry beats tiering by model confidence.** Encoding "is this safe to auto-fix" as data — a `severity` field in YAML — keeps the dangerous decision out of the model's hands entirely and makes the policy auditable and editable without a deploy.
+- **Constrain the LLM to intent classification, not action selection.** Mapping four intents to fixed, typed functions means the conversational layer can be friendly and forgiving while the action surface stays exactly as narrow as the knowledge base defines. The reply text is data, never code.
+- **A boring state machine is the backbone.** Dedupe, rate limiting, reminders, and the kill switch all fall out naturally once every detection is a row with a well-defined set of states. Most of the safety came from the schema, not the model.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/pipeline-guardian) — open-source reference implementation lands W8 of the AI Engineer learning path.
+[GitHub repo](https://github.com/Jamil1016/pipeline-guardian) — public.

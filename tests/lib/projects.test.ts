@@ -13,7 +13,8 @@ describe("projects metadata", () => {
       expect(p.name).toBeTruthy();
       expect(p.tagline).toBeTruthy();
       expect(p.stack.length).toBeGreaterThan(0);
-      expect(p.publicRepoStatus).toMatch(/^(coming|live)$/);
+      expect(p.prod).toMatch(/^(production|prototype)$/);
+      expect(p.code).toMatch(/^(public|private|coming)$/);
     }
   });
 

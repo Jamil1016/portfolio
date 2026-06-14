@@ -9,8 +9,10 @@ describe("ProjectTile", () => {
     tagline: "Auto-remediation agent",
     stack: ["Python", "Claude API"],
     publicRepoUrl: "https://github.com/Jamil1016/pipeline-guardian",
-    publicRepoStatus: "coming" as const,
-    publicEtaWeek: "W8",
+    prod: "production" as const,
+    code: "coming" as const,
+    etaWeek: "W8",
+    tags: ["python", "claude-api", "agent", "automation"],
   };
 
   it("renders project name, tagline, and stack badges", () => {

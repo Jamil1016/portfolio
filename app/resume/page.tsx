@@ -24,21 +24,21 @@ const PRINCIPLES = [
 
 const HIGHLIGHTS = [
   {
-    metric: "6h → <15m",
+    metric: "44m → 2–3m",
     text: (
       <>
-        Rewrote a six-hour, single-threaded nightly job that timed out and dropped
-        data into a <strong>parallel, idempotent ETL platform</strong> that finishes the
-        full pass in under 15 minutes.
+        Rewrote a six-hour, single-threaded nightly job into a{" "}
+        <strong>parallel, idempotent ETL platform</strong>; the server-side transform alone
+        now runs <strong>2.2M rows in 2–3 minutes</strong> (down from ~44 min in Python).
       </>
     ),
   },
   {
-    metric: "6.2M+ / night",
+    metric: "~2.2M / night",
     text: (
       <>
-        Operate ingestion of <strong>6.2M+ rows a night across 25 production tables</strong>{" "}
-        on Postgres at <strong>99%+ uptime</strong> over multi-month windows.
+        Operate <strong>~12 scheduled ETL pipelines</strong> ingesting{" "}
+        <strong>~2.2M asset-task rows a night</strong> into a six-schema Postgres warehouse.
       </>
     ),
   },

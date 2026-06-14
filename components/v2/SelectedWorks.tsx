@@ -61,9 +61,9 @@ export function SelectedWorks() {
                 </span>
               ))}
             </div>
-            {featured.publicEtaWeek && (
+            {featured.etaWeek && (
               <p className="mt-4 font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                Open source · {featured.publicEtaWeek}
+                Open source · {featured.etaWeek}
               </p>
             )}
           </div>
@@ -84,9 +84,9 @@ export function SelectedWorks() {
             </div>
             <h3 className="font-serif text-xl text-slate-50">{p.name}</h3>
             <p className="mt-1 text-sm text-slate-400 line-clamp-2">{p.tagline}</p>
-            {p.publicEtaWeek && (
+            {p.etaWeek && (
               <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                OSS · {p.publicEtaWeek}
+                OSS · {p.etaWeek}
               </p>
             )}
           </Link>
