@@ -50,7 +50,7 @@ describe("WeekCard", () => {
     expect(screen.getByText(/Messages API/)).toBeInTheDocument();
     expect(screen.getByText(/eval ≥ baseline/)).toBeInTheDocument();
     expect(screen.getByText(/DARA prod prompt log/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /build steps/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /full build steps/i })).toBeInTheDocument();
   });
 
   it("hides Learn/Measure/Data block, Ships line, and playbook link when those fields are null", () => {
@@ -67,6 +67,20 @@ describe("WeekCard", () => {
     expect(screen.queryByText("Measure")).not.toBeInTheDocument();
     expect(screen.queryByText("Data")).not.toBeInTheDocument();
     expect(screen.queryByText("Ships")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /build steps/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /full build steps/i })).not.toBeInTheDocument();
+  });
+
+  it("renders only the Learn row when just objectives is set", () => {
+    const partial = {
+      ...week,
+      objectives: "Just one objective here",
+      success_metric: null,
+      data_source: null,
+    };
+    render(<WeekCard week={partial} />);
+    expect(screen.getByText("Learn")).toBeInTheDocument();
+    expect(screen.getByText(/Just one objective here/)).toBeInTheDocument();
+    expect(screen.queryByText("Measure")).not.toBeInTheDocument();
+    expect(screen.queryByText("Data")).not.toBeInTheDocument();
   });
 });
