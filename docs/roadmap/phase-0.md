@@ -2,13 +2,23 @@
 
 Foundation phase: learn the Claude toolchain end-to-end by applying each capability directly to DARA and the portfolio repo. Every item ships a measurable artifact against a real system.
 
-## <a id="week-0a"></a>Week 0a — Claude Code power-user  `SUPPORT`
+## <a id="week-0a"></a>Week 0a — Claude Code: project memory & workflows  `SUPPORT`
 
-**Learn:** skills authoring; subagents; hooks; MCP config; slash commands; CLAUDE.md memory.
-**Measure:** a CLAUDE.md + 1 custom skill + 1 slash command committed; the skill auto-fires on a relevant prompt.
-**Data:** the portfolio (or DARA) repo — its real build/test commands and conventions.
-**Ships:** PR with the three artifacts (CLAUDE.md, skill file, slash command).
-**Build steps:** ① pick the repo (portfolio or DARA) → ② write CLAUDE.md with commands + conventions → ③ author a skill with a trigger description + a slash command → ④ trigger them on a real prompt and confirm auto-fire → ⑤ open PR.
+**Course:** Anthropic Academy — "Claude Code 101" (`anthropic.com/academy`). **Docs:** [memory](https://code.claude.com/docs/en/memory) · [common workflows](https://code.claude.com/docs/en/common-workflows).
+**Learn:** CLAUDE.md project memory & auto-memory; `/init`; path-scoped rules; the common workflows (explore a codebase, fix a bug, refactor, test).
+**Measure:** a CLAUDE.md committed to a repo Claude actually uses (real build/test commands + conventions); `/init` run and the file refined once.
+**Data:** the portfolio (or DARA) repo — its real commands and conventions.
+**Ships:** a CLAUDE.md PR to the repo.
+**Build steps:** ① run `/init` in the repo to scaffold CLAUDE.md → ② fill in the real build/test/lint commands + conventions → ③ add path-scoped rules where a subdir differs → ④ run a real task and confirm Claude uses the file → ⑤ open the PR.
+
+## <a id="week-0a-2"></a>Week 0a+ — Claude Code: automation (hooks, subagents, slash commands)  `SUPPORT`
+
+**Docs:** [hooks-guide](https://code.claude.com/docs/en/hooks-guide) · [sub-agents](https://code.claude.com/docs/en/sub-agents) · [commands](https://code.claude.com/docs/en/commands).
+**Learn:** lifecycle hooks (PreToolUse / PostToolUse); authoring subagents and when to fan out; custom slash commands.
+**Measure:** a hook that fires automatically + one custom slash command + one subagent, all working in a repo.
+**Data:** the portfolio (or DARA) repo.
+**Ships:** a PR adding a hook + a slash command (+ a subagent definition).
+**Build steps:** ① add a PreToolUse or Stop hook and confirm it fires on the matching event → ② write one custom slash command for a repeated task → ③ define a subagent for an isolated job (e.g. a focused reviewer) → ④ exercise all three on a real prompt → ⑤ open the PR.
 
 ## <a id="week-0b"></a>Week 0b — Prompt engineering tutorial  `HARDEN`
 
