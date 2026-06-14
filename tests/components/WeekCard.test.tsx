@@ -52,4 +52,21 @@ describe("WeekCard", () => {
     expect(screen.getByText(/DARA prod prompt log/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /build steps/i })).toBeInTheDocument();
   });
+
+  it("hides Learn/Measure/Data block, Ships line, and playbook link when those fields are null", () => {
+    const bare = {
+      ...week,
+      apply_action: null,
+      objectives: null,
+      success_metric: null,
+      data_source: null,
+      playbook_path: null,
+    };
+    render(<WeekCard week={bare} />);
+    expect(screen.queryByText("Learn")).not.toBeInTheDocument();
+    expect(screen.queryByText("Measure")).not.toBeInTheDocument();
+    expect(screen.queryByText("Data")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ships")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /build steps/i })).not.toBeInTheDocument();
+  });
 });
