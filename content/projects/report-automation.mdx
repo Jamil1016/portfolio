@@ -21,6 +21,17 @@ graph LR
 
 A Google Apps Script time-trigger fires and posts a `repository_dispatch` to GitHub (the open-items report is instead chained off the upstream `local-pipeline` data refresh, so its email never goes out with stale data). The receiving workflow applies a weekend check and, for daily finance, a Mon/Wed/Fri day-of-week gate — both evaluated in Eastern time so they behave the same whether the trigger fired the workflow or someone ran it manually. On a sending day the Python generator queries read-only Supabase analytics views (asyncpg + psycopg2), renders Chart.js 4.4 charts inside an HTML page that Playwright headless Chromium prints to PDF, and ships via the Gmail API. Open-items additionally writes per-carrier Excel + PDF to dated Drive sub-folders and shares the folder links in the email body.
 
+## The reports
+
+The reports share the trigger → render → deliver stack but differ in cadence, data, and output:
+
+| Report | Trigger | Cadence | Output |
+|---|---|---|---|
+| Daily finance | Apps Script time-trigger | Built weekdays; emailed Mon/Wed/Fri | HTML + PDF via Gmail |
+| Weekly compliance audit | Apps Script time-trigger | Fridays | PDF via Gmail |
+| Open-items | Upstream pipeline completion (event-driven) | Per data refresh | Per-carrier (VZW/ATT/TMO) Excel + PDF to Google Drive folders |
+| Final-COP-pending | — | prototype | — |
+
 ## Key Decisions
 
 - **Apps Script / event-driven triggers over GitHub Actions cron.** GHA cron drifts and silently skips. Apps Script time-triggers fire reliably, and the open-items report goes one better — it's dispatched by the upstream data pipeline's end-of-run, so the report can't beat its own data.

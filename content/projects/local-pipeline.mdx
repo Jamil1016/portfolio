@@ -19,6 +19,22 @@ graph LR
 
 The whole fleet was migrated off Windows Task Scheduler (2026-05-28) onto GitHub Actions, fired by Google Apps Script time-driven triggers — the on-prem box was a single point of failure no one could see fail. A single `asyncpg` pool (min=4 / max=20) runs on a dedicated background event-loop thread so synchronous extractor code can submit queries via `run_coroutine_threadsafe()`. A `ThreadPoolExecutor` runs extractors in parallel, streaming rows over asyncpg's binary `COPY` protocol into six schemas: `data_raw` (JSONB) → `data_staging` (normalized) → `analytics` (views + materialized views), plus `reference`, `pipeline`, and `agent`. After extraction, a backfill pass resolves derived foreign keys, then materialized views refresh one at a time.
 
+## The pipelines
+
+Each pipeline has its own source and extraction method; they share the warehouse, the `asyncpg`/COPY machinery, and the GitHub Actions + Apps Script trigger layer — which is why this is one platform, not twelve scripts.
+
+| Pipeline | Source | What it does |
+|---|---|---|
+| orgs / projects | Swift API | Org + project master data |
+| asset-tasks | Swift API | The core dataset (~2.2M rows/night); per-day chunked to dodge the truncation cap |
+| timer | Swift API + Google Form | Labor timer entries; real-time corrections/dedup via a Form `onFormSubmit` hook |
+| QA forms | Google Forms | Quality-form submissions |
+| user priorities | Swift API | Task-prioritization signals |
+| calendar-leave | Google Calendar | Leave events, AI-normalized into structured rows |
+| timer-discrepancies | derived | Reconciles timer entries against expected values |
+| open-items snapshots | Swift API | Point-in-time open-item state for the reports |
+| AR-aging + sales | Gmail | Finance figures parsed out of inbound emails |
+
 ## Key Decisions
 
 - **Per-day API chunking.** The Swift API silently truncates a wide date range at ~1,000 rows — no error, just fewer rows. The timer extractor splits each range into one API call per calendar day, which sidesteps the cap entirely. Cost: more API calls. Benefit: zero silent data loss.
