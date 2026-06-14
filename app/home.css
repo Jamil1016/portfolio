@@ -149,8 +149,8 @@ html { scroll-padding-top: 73px; }
 /* ---------- hero ---------- */
 /* Fill the first viewport so the next section sits below the fold (no peek)
    when Home is the full scroll. Header (sticky) + stats band + ticker ≈ 242px. */
-.home-shell .hero { border-bottom: 1px solid var(--rule); min-height: calc(100vh - 242px); }
-.home-shell .hero-grid { display: grid; grid-template-columns: 1fr 500px; align-items: stretch; }
+.home-shell .hero { border-bottom: 1px solid var(--rule); min-height: calc(100vh - 242px); display: flex; flex-direction: column; }
+.home-shell .hero-grid { display: grid; grid-template-columns: 1fr 500px; align-items: stretch; flex: 1; }
 .home-shell .hero-left { padding: 48px 64px 48px 0; border-right: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: center; }
 .home-shell .hero-left h1 {
   font-family: var(--font-serif), serif; font-weight: 400;
@@ -178,7 +178,9 @@ html { scroll-padding-top: 73px; }
   font-family: var(--font-mono), monospace; font-size: 10.5px;
   letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint);
 }
-.home-shell .run-body { flex: 1; overflow: hidden; }
+/* min-height:0 lets this flex item shrink below its content so the marquee
+   scrolls inside a bounded window instead of expanding the whole column. */
+.home-shell .run-body { flex: 1 1 0; min-height: 0; overflow: hidden; position: relative; }
 .home-shell .run-row {
   padding: 11px 28px; border-bottom: 1px solid var(--soft);
   font-family: var(--font-mono), monospace; font-size: 12.5px; align-items: baseline;
@@ -197,7 +199,8 @@ html { scroll-padding-top: 73px; }
   .home-shell .run-track { animation: hs-run-scroll 32s linear infinite; }
   .home-shell .run:hover .run-track { animation-play-state: paused; }
 }
-@keyframes hs-run-scroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+/* 4 segments in the track → one segment is 25%; loop by exactly one segment */
+@keyframes hs-run-scroll { from { transform: translateY(0); } to { transform: translateY(-25%); } }
 :root[data-motion="off"] .home-shell .run-track { animation: none; }
 
 /* ---------- stats ---------- */
