@@ -138,6 +138,45 @@ from (values
 where lw.sort_order = v.sort_order
   and lw.owner_id in (select id from auth.users where email = 'jamilmendez1016@gmail.com');
 
+-- Refresh apply_action to a crisp "Ships" deliverable per row (folds the old
+-- course-nudge text into a clear deliverable matching the playbook Ships line).
+update public.learning_weeks lw
+set apply_action = v.ships,
+    updated_at   = now()
+from (values
+  (1,   'PR adding a CLAUDE.md + one custom skill + one slash command to the repo'),
+  (2,   'Prompt-rewrite PR with before/after eval numbers'),
+  (3,   'Refactor PR to the DARA repo + a short API-contract note'),
+  (4,   'Refactor PR to the DARA repo + a "loop anatomy" note'),
+  (5,   'An MCP server exposing the query + a 3-input test transcript'),
+  (6,   'A packaged reporting skill + a trigger transcript'),
+  (7,   'Caching PR to the DARA repo + a before/after token table'),
+  (8,   'A Managed-Agent design note in the playbook'),
+  (9,   'A live DARA feature PR + a public writeup'),
+  (20,  'An eval harness in the repo + a baseline pass-rate'),
+  (25,  'A tactics→defense note in the playbook'),
+  (26,  'An OWASP-LLM risk-map table + one filed safety gap'),
+  (27,  'A red-team result note + any mitigation PR'),
+  (28,  'An SQLi test set + the NL→SQL guardrail PR'),
+  (29,  'A controls note for Pipeline Guardian autonomy'),
+  (30,  'A RAG prototype over the analytics views + a 5-question eval'),
+  (40,  'An observability/tracing PR + one trace walkthrough'),
+  (50,  'A LangChain-lens comparison note (≥2 improvements)'),
+  (60,  'A dbt project skeleton + a passing dbt test'),
+  (70,  'A dbt-model PR + a row-for-row reconciliation check'),
+  (80,  'An Airflow DAG file + a local end-to-end run log'),
+  (90,  'A Supabase/GHA→GCP swap table with cost/benefit notes'),
+  (100, 'A DARA-on-GCP architecture diagram + rationale'),
+  (110, 'A working agent demo repo from one depth track'),
+  (120, 'A CI data-validation gate PR'),
+  (130, 'An explainer note linking a transformer concept to DARA behavior'),
+  (500, 'The GCP Professional Data Engineer certificate (link as artifact)'),
+  (501, 'The dbt Analytics Engineering certificate (link as artifact)'),
+  (999, 'The published writeup (link as artifact)')
+) as v(sort_order, ships)
+where lw.sort_order = v.sort_order
+  and lw.owner_id in (select id from auth.users where email = 'jamilmendez1016@gmail.com');
+
 -- Verify
 select sort_order, week_label, left(objectives, 40) as learn, left(success_metric, 40) as measure
 from public.learning_weeks
