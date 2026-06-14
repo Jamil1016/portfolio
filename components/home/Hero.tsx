@@ -33,12 +33,13 @@ function SystemsPanel() {
         <span>status</span>
       </div>
       <div className="run-body">
-        {/* Auto-scrolling live feed; duplicated for a seamless loop, paused on hover. */}
+        {/* Auto-scrolling live feed; segments duplicated so the loop seam stays
+            covered even when the panel is tall. Pauses on hover. */}
         <div className="run-track">
           <div className="run-seg">{rows("a")}</div>
-          <div className="run-seg" aria-hidden="true">
-            {rows("b")}
-          </div>
+          <div className="run-seg" aria-hidden="true">{rows("b")}</div>
+          <div className="run-seg" aria-hidden="true">{rows("c")}</div>
+          <div className="run-seg" aria-hidden="true">{rows("d")}</div>
         </div>
       </div>
     </div>

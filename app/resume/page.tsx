@@ -43,11 +43,12 @@ const HIGHLIGHTS = [
     ),
   },
   {
-    metric: "76×",
+    metric: "2,866 PDFs",
     text: (
       <>
-        Cut PDF data-extraction time <strong>76×</strong> by parallelizing parsing across
-        email attachments with a process pool.
+        Built a resumable, two-pool downloader that pulls an entire org&rsquo;s requirement
+        PDFs over a paginated API — <strong>2,866 files / 3.4 GB in one ~61-minute run</strong>,
+        recovering cleanly from a mid-run network outage.
       </>
     ),
   },
