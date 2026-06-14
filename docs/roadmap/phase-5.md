@@ -25,3 +25,13 @@ Elective tracks to go deeper on agent frameworks, ML engineering rigour, or LLM 
 **Data:** DARA behavior logs.
 **Ships:** an explainer note committed to the repo.
 **Build steps:** ① study one Hugging Face LLM course chapter (e.g., attention mechanisms) → ② search DARA behavior logs for a matching observable behavior (e.g., attention-related context truncation, tokenization surprises) → ③ write the explainer: describe the internal mechanism and show how it explains the observed behavior → ④ review for accuracy against the course material → ⑤ commit the explainer note.
+
+## <a id="managed-agents"></a>Managed Agents API  `SUPPORT`
+
+Moved here from Phase 0 — it's out of the CCA-F blueprint (CCA-F is about *building* your own orchestration, not the hosted product), but still useful depth once the core is solid.
+
+**Learn:** server-managed agents vs the self-hosted loop; sessions; rubric-graded outcomes; tradeoffs.
+**Measure:** a design sketch of DARA as a Managed Agent with one rubric-graded outcome (explicit pass/fail).
+**Data:** DARA's current agent definition + one representative task.
+**Ships:** a design note in the playbook.
+**Build steps:** ① read the Managed Agents docs → ② map DARA's current loop onto the managed model → ③ define one rubric-graded outcome → ④ note the tradeoffs vs self-hosting → ⑤ commit the note.
