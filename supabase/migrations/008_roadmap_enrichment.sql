@@ -1,0 +1,184 @@
+-- 008_roadmap_enrichment.sql
+-- Adds enrichment columns to learning_weeks and re-seeds all rows with
+-- project-centric content (Learn / Measure / Data + playbook link).
+-- Idempotent: safe to re-run. Public views (v_now_learning, v_learning_public)
+-- are intentionally NOT modified; the new columns stay owner-only via RLS.
+
+alter table public.learning_weeks add column if not exists objectives     text;
+alter table public.learning_weeks add column if not exists success_metric text;
+alter table public.learning_weeks add column if not exists data_source    text;
+alter table public.learning_weeks add column if not exists playbook_path  text;
+
+-- Re-seed enrichment fields for the owner's rows, matched by sort_order.
+update public.learning_weeks lw
+set objectives     = v.objectives,
+    success_metric = v.success_metric,
+    data_source    = v.data_source,
+    playbook_path  = v.playbook_path,
+    updated_at     = now()
+from (values
+  -- (sort_order, objectives, success_metric, data_source, playbook_path)
+  (1, 'Skills authoring; subagents; hooks; MCP config; slash commands; CLAUDE.md memory',
+      'A CLAUDE.md + 1 custom skill + 1 slash command committed; the skill auto-fires on a relevant prompt',
+      'The portfolio (or DARA) repo — its real build/test commands and conventions',
+      'docs/roadmap/phase-0.md#week-0a'),
+  (2, 'Tutorial structure: role, clear instructions, examples, output formatting, chain-of-thought',
+      'DARA''s worst prompt rewritten; eval pass-rate improves by ≥1 previously-failing case',
+      'DARA''s worst-performing prompt + its failing eval cases',
+      'docs/roadmap/phase-0.md#week-0b'),
+  (3, 'Messages API shape; streaming; tool_use/tool_result cycle; stop_reason; token usage fields',
+      '1 non-idiomatic DARA call refactored with stop_reason handled; evals still pass',
+      'DARA''s existing Anthropic SDK call sites',
+      'docs/roadmap/phase-0.md#week-0c'),
+  (4, 'Canonical agent loop (model→tool_use→tool_result→repeat); stop conditions; Agent SDK context/tools',
+      'DARA loop refactored to canonical pattern with 0 eval regressions + a max-turn loop guard',
+      'DARA''s existing agent loop + the NL→SQL tool',
+      'docs/roadmap/phase-0.md#week-0d'),
+  (5, 'MCP server anatomy (tools/resources/prompts); stdio transport; tool discovery; tool schema design',
+      '1 Report Automation query exposed as an MCP tool, returning correct rows on 3 sample inputs',
+      'A Report Automation query (daily finance report shape)',
+      'docs/roadmap/phase-0.md#week-0e'),
+  (6, 'SKILL.md frontmatter & triggers; progressive disclosure; bundling scripts; skill vs prompt',
+      'A reporting skill that auto-triggers on a reporting request and produces the report format',
+      'The Report Automation report spec/format',
+      'docs/roadmap/phase-0.md#week-0f'),
+  (7, 'cache_control breakpoints; 5-min TTL & invalidation; cache_read vs cache_creation tokens; when caching loses',
+      'cache_read_input_tokens>0 on call #2 AND 10-call session input cost drops ≥60% vs recorded baseline',
+      'DARA''s system prompt + the 25-table schema block it injects (static prefix)',
+      'docs/roadmap/phase-0.md#week-0g'),
+  (8, 'Server-managed agents vs self-hosted loop; sessions; rubric-graded outcomes; tradeoffs',
+      'A design sketch of DARA as a Managed Agent with one rubric-graded outcome (explicit pass/fail)',
+      'DARA''s current agent definition + one representative task',
+      'docs/roadmap/phase-0.md#week-0h'),
+  (9, 'Integrating loop + MCP tool + skill + caching into one shipped feature; writing it up',
+      '1 DARA feature live E2E using loop + MCP tool + skill + caching; a public writeup exists',
+      'DARA prod',
+      'docs/roadmap/phase-0.md#capstone'),
+  (20, 'Eval harness design; graded test sets; classification vs model-graded evals; measuring prompt changes',
+       'Eval harness over 1 decision with ≥10 graded cases producing a pass-rate; a prompt change moves it',
+       'Real DARA query/answer pairs (or Pipeline Guardian remediation decisions)',
+       'docs/roadmap/phase-1.md#week-2'),
+  (25, 'Prompt-injection tactics: instruction override, encoding, role-play, indirect; which defenses block which',
+       'Beat ≥ Gandalf Level 5; documented tactics→defense map applied to DARA''s prompt boundary',
+       'Gandalf levels (external) applied to DARA''s prompt boundary',
+       'docs/roadmap/phase-1_5.md#week-2-5a'),
+  (26, 'OWASP LLM Top 10 risks; mapping each to a real system',
+       'All 10 mapped to your systems with covered/not-covered verdicts; ≥1 gap filed as a DARA ticket',
+       'DARA + Pipeline Guardian architecture',
+       'docs/roadmap/phase-1_5.md#week-2-5b'),
+  (27, 'Systematic red-team techniques; building adversarial cases; measuring robustness',
+       '1 red-team technique applied to DARA prompt construction with a documented result + mitigation',
+       'DARA prompt construction path',
+       'docs/roadmap/phase-1_5.md#week-2-5c'),
+  (28, 'SQLi vectors; auth bypass; how NL→SQL can emit unsafe SQL; parameterization/allowlisting',
+       'DARA NL→SQL path verified against ≥5 malicious prompts — all blocked or read-only/schema-scoped',
+       'DARA NL→SQL generation + DB role/permissions',
+       'docs/roadmap/phase-1_5.md#week-2-5d'),
+  (29, 'Responsible scaling concepts; safety controls for autonomous agents',
+       'A note listing which RSP-style controls Pipeline Guardian has vs lacks',
+       'Pipeline Guardian''s autonomy scope',
+       'docs/roadmap/phase-1_5.md#week-2-5e'),
+  (30, 'Retrieval over structured/unstructured; chunking; embeddings; RAG eval (faithfulness/relevance)',
+       'RAG over analytics views answers 5 business questions with citations; retrieval relevance measured',
+       'The analytics-schema views (table/column descriptions, metric definitions)',
+       'docs/roadmap/phase-2.md#week-3'),
+  (40, 'Agent traces & spans; what to log (tool calls, tokens, latency, decisions); offline vs online eval',
+       'Traces added so every DARA/Guardian run emits a structured trace answering "why did run X decide Y"',
+       'DARA/Pipeline Guardian run logs',
+       'docs/roadmap/phase-2.md#week-4'),
+  (50, 'LCEL composition; tool abstraction; LangChain''s agent model vs hand-rolled; what to borrow/skip',
+       'A written comparison identifying ≥2 concrete improvements (adopted or rejected with reason)',
+       'DARA/Pipeline Guardian tool definitions',
+       'docs/roadmap/phase-2.md#week-5'),
+  (60, 'dbt models, refs, sources, tests, materializations; dbt vs hand-written SQL pipelines',
+       'dbt-postgres running against Supabase with ≥1 model built and dbt test passing',
+       'The analytics schema (read-only)',
+       'docs/roadmap/phase-3.md#week-6'),
+  (70, 'Converting procedural SQL to a dbt model; sources + schema tests; incremental models',
+       '1 Report Automation query as a dbt model with ≥2 tests passing, output reconciling row-for-row',
+       'A Report Automation query + its current output',
+       'docs/roadmap/phase-3.md#week-7'),
+  (80, 'DAGs, operators, scheduling, retries, backfill; Airflow vs GitHub Actions cron',
+       'pipeline.yml redrawn as an Airflow DAG running locally E2E on sample data with task-level retries',
+       'The ETL platform''s pipeline.yml + a sample slice',
+       'docs/roadmap/phase-3.md#week-8'),
+  (90, 'GCP GenAI service map (Vertex AI, BigQuery, Cloud Run, Pub/Sub); managed vs self-hosted tradeoffs',
+       'A table mapping ≥3 Supabase/GHA components to GCP equivalents with a cost/benefit note each',
+       'Your current architecture inventory',
+       'docs/roadmap/phase-4.md#week-9'),
+  (100, 'Cloud architecture diagramming; data flow; failure domains; cost modeling',
+        'A DARA-on-GCP diagram with data flow + one failure-mode annotation per component',
+        'DARA''s current architecture',
+        'docs/roadmap/phase-4.md#week-10'),
+  (110, 'Agent frameworks breadth (track-dependent)',
+        'Complete one depth track with a working agent demo artifact',
+        'A sandbox dataset or DARA subset',
+        'docs/roadmap/phase-5.md#hf-agents'),
+  (120, 'Production-ML rigor: testing, CI/CD for ML, monitoring',
+        'Apply one MLOps practice to an existing pipeline (e.g., a data-validation gate in CI)',
+        'ETL/Report Automation CI',
+        'docs/roadmap/phase-5.md#mlops'),
+  (130, 'Transformer internals; tokenization; attention; fine-tuning basics',
+        'A written explainer connecting one internal concept to an observed DARA behavior',
+        'DARA behavior logs',
+        'docs/roadmap/phase-5.md#hf-llm'),
+  (500, 'GCP Professional Data Engineer domains: storage, pipelines, ML, security',
+        'Pass the GCP Professional Data Engineer exam',
+        'Official exam guide + practice exams',
+        'docs/roadmap/phase-4.md#cert-gcp-pde'),
+  (501, 'dbt Analytics Engineering exam domains: modeling, testing, deployment',
+        'Pass the dbt Analytics Engineering certification exam',
+        'dbt cert exam guide',
+        'docs/roadmap/phase-3.md#cert-dbt'),
+  (999, 'Technical writing; architecture narrative; presenting evals/safety/observability',
+        'A published writeup with architecture diagram, eval harness, RAG/agent vocab, GCP comparison',
+        'Everything built across the roadmap',
+        'docs/roadmap/README.md#capstone')
+) as v(sort_order, objectives, success_metric, data_source, playbook_path)
+where lw.sort_order = v.sort_order
+  and lw.owner_id in (select id from auth.users where email = 'jamilmendez1016@gmail.com');
+
+-- Refresh apply_action to a crisp "Ships" deliverable per row (folds the old
+-- course-nudge text into a clear deliverable matching the playbook Ships line).
+update public.learning_weeks lw
+set apply_action = v.ships,
+    updated_at   = now()
+from (values
+  (1,   'PR adding a CLAUDE.md + one custom skill + one slash command to the repo'),
+  (2,   'Prompt-rewrite PR with before/after eval numbers'),
+  (3,   'Refactor PR to the DARA repo + a short API-contract note'),
+  (4,   'Refactor PR to the DARA repo + a "loop anatomy" note'),
+  (5,   'An MCP server exposing the query + a 3-input test transcript'),
+  (6,   'A packaged reporting skill + a trigger transcript'),
+  (7,   'Caching PR to the DARA repo + a before/after token table'),
+  (8,   'A Managed-Agent design note in the playbook'),
+  (9,   'A live DARA feature PR + a public writeup'),
+  (20,  'An eval harness in the repo + a baseline pass-rate'),
+  (25,  'A tactics→defense note in the playbook'),
+  (26,  'An OWASP-LLM risk-map table + one filed safety gap'),
+  (27,  'A red-team result note + any mitigation PR'),
+  (28,  'An SQLi test set + the NL→SQL guardrail PR'),
+  (29,  'A controls note for Pipeline Guardian autonomy'),
+  (30,  'A RAG prototype over the analytics views + a 5-question eval'),
+  (40,  'An observability/tracing PR + one trace walkthrough'),
+  (50,  'A LangChain-lens comparison note (≥2 improvements)'),
+  (60,  'A dbt project skeleton + a passing dbt test'),
+  (70,  'A dbt-model PR + a row-for-row reconciliation check'),
+  (80,  'An Airflow DAG file + a local end-to-end run log'),
+  (90,  'A Supabase/GHA→GCP swap table with cost/benefit notes'),
+  (100, 'A DARA-on-GCP architecture diagram + rationale'),
+  (110, 'A working agent demo repo from one depth track'),
+  (120, 'A CI data-validation gate PR'),
+  (130, 'An explainer note linking a transformer concept to DARA behavior'),
+  (500, 'The GCP Professional Data Engineer certificate (link as artifact)'),
+  (501, 'The dbt Analytics Engineering certificate (link as artifact)'),
+  (999, 'The published writeup (link as artifact)')
+) as v(sort_order, ships)
+where lw.sort_order = v.sort_order
+  and lw.owner_id in (select id from auth.users where email = 'jamilmendez1016@gmail.com');
+
+-- Verify
+select sort_order, week_label, left(objectives, 40) as learn, left(success_metric, 40) as measure
+from public.learning_weeks
+where owner_id in (select id from auth.users where email = 'jamilmendez1016@gmail.com')
+order by sort_order;
