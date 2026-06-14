@@ -1,0 +1,36 @@
+## What it is
+
+A scheduled pipeline that compiles a personalized daily briefing with Claude and delivers
+it as an HTML email. It pulls from several sources — release/news signals, usage stats,
+and recent work-log/commit history — and Claude assembles them into a sectioned digest
+that lands in the inbox every morning.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  S1[News / release signals] --> A[Claude:<br/>compile digest]
+  S2[Usage stats] --> A
+  S3[Work log / commits] --> A
+  A --> H[HTML email]
+  H --> G[Gmail API<br/>send]
+  CR[Scheduled routine] --> A
+`}</MermaidDiagram>
+
+Sources are fetched fail-soft (a dead source degrades the digest, it doesn't break the
+run), Claude composes the multi-section HTML, and it's sent via Gmail OAuth on a daily
+schedule.
+
+## Stack
+
+Python · Claude API · Gmail OAuth · Google Calendar API · YAML config · BeautifulSoup4 · HTTPX
+
+## Highlights
+
+- Multi-section digest (announcements, tips, usage metrics, commit history).
+- Fail-soft source fetching — partial data still produces a useful briefing.
+- Runs unattended on a daily schedule.
+
+## Links
+
+Part of the `ai-projects` monorepo; standalone open-source repo coming soon.

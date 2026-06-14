@@ -3,8 +3,8 @@ import { projects, getProjectBySlug } from "@/lib/projects";
 import { isValidTag } from "@/lib/tags";
 
 describe("projects metadata", () => {
-  it("exposes exactly six projects", () => {
-    expect(projects).toHaveLength(7);
+  it("exposes the full project catalog", () => {
+    expect(projects).toHaveLength(13);
   });
 
   it("each project has required fields", () => {

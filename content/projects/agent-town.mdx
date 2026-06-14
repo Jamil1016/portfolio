@@ -1,0 +1,34 @@
+## What it is
+
+A real-time visualization that renders a software monorepo as a living, top-down
+pixel-art town. Each project is a building; dev activity (commits, CI runs) animates the
+world — buildings light up, NPCs move — so the health and momentum of a multi-project
+codebase is legible at a glance instead of buried in dashboards.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  R[Repo activity:<br/>commits / CI] --> W[Node + WebSocket<br/>backend]
+  W -->|live events| C[Phaser 3 client]
+  C --> T[Town scene:<br/>buildings = projects]
+  C --> I[Interior scenes<br/>for key projects]
+`}</MermaidDiagram>
+
+A Node/Express backend streams repo activity over WebSockets to a Phaser 3 client
+(bundled with Vite). The client maps each project to a building and reflects live events
+into the scene; key projects get their own interior views.
+
+## Stack
+
+TypeScript · Phaser 3 · Vite · Express · WebSockets · Node.js
+
+## Highlights
+
+- Live, event-driven town that reacts to commits and CI in real time.
+- Projects-as-buildings metaphor; interior scenes for flagship projects.
+- An unusual, memorable way to make monorepo activity ambient and glanceable.
+
+## Links
+
+[GitHub repo](https://github.com/jamilmendez-ontel/agent-town) — public.

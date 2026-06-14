@@ -1,0 +1,33 @@
+## The Problem
+
+Asset-task data for a set of organizations had to be pulled from a third-party API,
+validated, and made queryable — without re-pulling everything every run, and without
+paying hot-database prices for cold historical data.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  API[(Swift API)] --> X[Incremental<br/>extract on last_updated]
+  X --> V[Validate +<br/>normalize]
+  V --> H[Hot tier:<br/>Supabase Postgres]
+  V --> C[Cold tier:<br/>Parquet via DuckDB]
+`}</MermaidDiagram>
+
+Extraction is incremental — only records whose `last_updated` changed are pulled. Data is
+validated and written to two tiers: a hot tier (Supabase Postgres) for live queries and a
+cold tier (Parquet, queried with DuckDB) for cheap historical storage.
+
+## Stack
+
+Python · DuckDB · Parquet · Supabase Postgres · asyncpg · pytest
+
+## Highlights
+
+- 2.6M+ rows validated through the pipeline.
+- Incremental sync keyed on `last_updated` — no full re-pulls.
+- Hybrid hot/cold storage: live queries on Postgres, cheap history on Parquet.
+
+## Links
+
+Part of the `ai-projects` monorepo; standalone open-source repo coming soon.

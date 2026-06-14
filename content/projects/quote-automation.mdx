@@ -1,0 +1,32 @@
+## What it is
+
+A full-stack web app for generating quotes, with a rich-text editor, real-time
+collaboration, and one-click PDF export. Built to turn a manual, copy-paste quoting
+process into a fast, collaborative, repeatable workflow.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  U[Editor:<br/>TipTap rich text] --> RT[Realtime sync<br/>Supabase]
+  RT --> DB[(Supabase<br/>Postgres)]
+  U --> PDF[PDF export<br/>react-pdf]
+  T[Playwright tests] -.-> U
+`}</MermaidDiagram>
+
+A Next.js front end with a TipTap rich-text editor syncs in real time through Supabase;
+quotes render to PDF on demand, and the critical flows are covered by Playwright tests.
+
+## Stack
+
+Next.js · React · TypeScript · Tailwind · Supabase · TipTap · react-pdf · Playwright · Google Auth
+
+## Highlights
+
+- Real-time collaborative editing backed by Supabase.
+- Rich-text quote authoring with on-demand PDF export.
+- End-to-end test automation with Playwright.
+
+## Links
+
+Part of the `ai-projects` monorepo; standalone open-source repo coming soon.

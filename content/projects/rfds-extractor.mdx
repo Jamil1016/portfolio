@@ -1,0 +1,33 @@
+## What it is
+
+A desktop tool that scrapes telecom RFDS documents from Gmail attachments and exports the
+parsed data to monthly Excel files. It ships as a single bundled Windows executable so a
+non-technical operator can run it without a Python environment.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  G[(Gmail<br/>attachments)] --> P[pdfplumber<br/>deterministic parse]
+  P -->|standard template| X[openpyxl:<br/>monthly Excel]
+  P -->|non-standard| C[Claude fallback]
+  C --> X
+`}</MermaidDiagram>
+
+A deterministic `pdfplumber` parser handles standard templates; non-standard layouts fall
+back to a Claude pass. Output is written to monthly Excel workbooks. The whole thing is
+packaged with PyInstaller into one `.exe`.
+
+## Stack
+
+Python · pdfplumber · openpyxl · Gmail API (OAuth) · PyInstaller · optional Claude fallback
+
+## Highlights
+
+- Single-file bundled `.exe` — no runtime setup for the operator.
+- Deterministic parser first, Claude fallback only for non-standard templates (cost-aware).
+- Pulls straight from Gmail attachments; exports operator-ready Excel.
+
+## Links
+
+Part of the `ai-projects` monorepo; standalone open-source repo coming soon.

@@ -1,0 +1,36 @@
+## What it is
+
+An internal operations portal — a single sign-on entry point that unifies data-health
+views, dashboards, reports, and a chat analyst into one surface. Built multi-tenant-ready,
+with the database as the trust boundary.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph LR
+  U[User] --> O[Google OAuth]
+  O --> P[Next.js portal]
+  P --> RLS[Supabase RLS<br/>trust boundary]
+  RLS --> D[(Postgres)]
+  P --> W1[Data health]
+  P --> W2[Dashboards / reports]
+  P --> W3[Chat analyst]
+`}</MermaidDiagram>
+
+Auth is Google OAuth; authorization is enforced at the database via Supabase Row-Level
+Security rather than in app code, so the trust boundary sits at the data layer. The portal
+surfaces data-health, dashboards/reports, and a chat analyst behind one login.
+
+## Stack
+
+Next.js (App Router) · React · TypeScript · Supabase (Postgres + Auth + RLS) · Tailwind · Framer Motion
+
+## Highlights
+
+- Row-Level Security at the DB as the authorization boundary (not app-layer checks).
+- Single sign-on hub for data health, dashboards, reports, and a chat analyst.
+- Multi-tenant-ready foundation.
+
+## Links
+
+Part of the `ai-projects` monorepo; standalone open-source repo coming soon.
