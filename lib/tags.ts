@@ -28,6 +28,13 @@ export const ALL_TAGS = [
   // security (2)
   "security",
   "ai-safety",
+  // frontend & misc (6)
+  "react",
+  "nodejs",
+  "websockets",
+  "visualization",
+  "dashboards",
+  "pdf",
 ] as const;
 
 export type Tag = (typeof ALL_TAGS)[number];
