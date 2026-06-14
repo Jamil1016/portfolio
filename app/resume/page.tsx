@@ -29,16 +29,16 @@ const HIGHLIGHTS = [
       <>
         Rewrote a six-hour, single-threaded nightly job into a{" "}
         <strong>parallel, idempotent ETL platform</strong>; the server-side transform alone
-        now runs <strong>2.2M rows in 2–3 minutes</strong> (down from ~44 min in Python).
+        now runs <strong>2.6M rows in 2–3 minutes</strong> (down from ~44 min in Python).
       </>
     ),
   },
   {
-    metric: "~2.2M / night",
+    metric: "12.2M+ rows",
     text: (
       <>
-        Operate <strong>~12 scheduled ETL pipelines</strong> ingesting{" "}
-        <strong>~2.2M asset-task rows a night</strong> into a six-schema Postgres warehouse.
+        Operate <strong>~14 scheduled ETL pipelines</strong> feeding a six-schema,
+        111-table Postgres warehouse of <strong>~12.2M rows</strong>.
       </>
     ),
   },

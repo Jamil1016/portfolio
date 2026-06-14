@@ -14,10 +14,10 @@ export type Stat = {
 
 // Headline proof points (see DESIGN_BRIEF §1).
 export const STATS: Stat[] = [
-  { value: 2.2, decimals: 1, suffix: "M+", label: "rows ingested / night" },
-  { value: 12, decimals: 0, suffix: "", label: "scheduled pipelines" },
+  { value: 12.2, decimals: 1, suffix: "M+", label: "rows across 111 tables" },
+  { value: 14, decimals: 0, suffix: "", label: "active pipelines" },
   { value: 10, decimals: 0, suffix: "", label: "systems in production" },
-  { value: 15, decimals: 0, suffix: "×", label: "faster nightly transform" },
+  { value: 2, decimals: 0, suffix: "", label: "LLM agents in production" },
 ];
 
 export type Skill = { name: string; pct: number };
@@ -60,7 +60,7 @@ export const EXPERIENCE: ExperienceEntry[] = [
     when: "2023–now",
     current: true,
     role: "Data + AI Engineer · telecom operations",
-    what: "Own the nightly data platform end to end: ~12 ETL pipelines into a six-schema Postgres warehouse, the agent layer that monitors them, and the reporting it feeds.",
+    what: "Own the nightly data platform end to end: ~14 ETL pipelines into a six-schema, 111-table Postgres warehouse (~12.2M rows), the agent layer that monitors them, and the reporting it feeds.",
   },
   {
     when: "2021–2023",
@@ -85,8 +85,8 @@ export const STUDY_TO_PROD: StudyToProd[] = [
   },
   {
     learned: "Async Python patterns",
-    title: "15× faster nightly transform",
-    detail: "Server-side SQL transform: 2.2M rows in 2–3 min, down from ~44 min.",
+    title: "Async ETL platform",
+    detail: "~14 pipelines feeding a 111-table, ~12.2M-row Postgres warehouse.",
   },
   {
     learned: "Agent design & tool use",

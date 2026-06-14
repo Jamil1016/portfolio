@@ -38,7 +38,7 @@ export function Work() {
             </div>
             <h3>{featured.name}</h3>
             <p>{featured.tagline}</p>
-            <div className="metric">~2.2M rows / night · 12 pipelines · 2–3 min transform</div>
+            <div className="metric">12.2M+ rows · 111 tables · ~14 pipelines</div>
             <Chips tags={featured.tags} />
           </Link>
 
