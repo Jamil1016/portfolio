@@ -2,7 +2,7 @@
 
 Nightly ingestion of millions of rows from the Swift Projects API (plus Gmail, Google Calendar, and Google Forms) into a Postgres warehouse, feeding analytics views consumed by internal dashboards and an AI assistant. The naive approach — a single Python script pulling everything sequentially — took roughly six hours, regularly timed out, and silently dropped data when the upstream API returned more than ~1,000 rows for a single date range.
 
-Today it's a fleet of ~12 scheduled pipelines: orgs/projects, asset-tasks, timer, QA forms, user priorities, calendar-leave, timer-discrepancies, open-items snapshots, and Gmail-driven AR-aging + sales. Each one must be parallel, idempotent, and observable — failure of one extractor can't take down the others, and re-running has to produce the same result every time.
+Today it's ~14 scheduled pipelines (counted by data source) — asset-tasks (the nightly core), orgs/projects, timer, user-priorities, QA forms, daily reports, Gmail revenue (AR-aging + sales), calendar-leave, timer-discrepancies, timer duplicate-resolve, targeted asset-tasks, and the invoicing/quote feed — plus dispatches into the date-validator and gmail-scraper systems. Each must be parallel, idempotent, and observable: one extractor failing can't take down the others, and re-running produces the same result every time.
 
 ## Architecture
 
@@ -25,15 +25,20 @@ Each pipeline has its own source and extraction method; they share the warehouse
 
 | Pipeline | Source | What it does |
 |---|---|---|
+| asset-tasks (nightly core) | Swift API | `stg_asset_tasks` ~2.6M rows; per-day chunked to dodge the ~1k truncation cap |
 | orgs / projects | Swift API | Org + project master data |
-| asset-tasks | Swift API | The core dataset (~2.2M rows/night); per-day chunked to dodge the truncation cap |
-| timer | Swift API + Google Form | Labor timer entries; real-time corrections/dedup via a Form `onFormSubmit` hook |
+| timer | Swift API | Labor timer activities |
+| user-priorities | Swift API | Task-prioritization signals |
 | QA forms | Google Forms | Quality-form submissions |
-| user priorities | Swift API | Task-prioritization signals |
+| daily reports | Swift API | Daily operational report rows (~674k) |
+| Gmail revenue | Gmail | AR-aging + sales figures parsed from inbound email |
 | calendar-leave | Google Calendar | Leave events, AI-normalized into structured rows |
-| timer-discrepancies | derived | Reconciles timer entries against expected values |
-| open-items snapshots | Swift API | Point-in-time open-item state for the reports |
-| AR-aging + sales | Gmail | Finance figures parsed out of inbound emails |
+| timer-discrepancies | Form → Sheets → DB | Reconciles timer entries against expected values |
+| timer duplicate-resolve | Google Form (on-submit) | Real-time dedup of duplicate timer rows |
+| targeted asset-tasks | Swift API | Report-driven re-extract of a subset |
+| invoicing / quote | Swift API | Invoicing-form + quote data; email dispatcher |
+
+On completion it also **dispatches** two downstream systems — the date-validator and the gmail-scraper — for ~14 orchestrated pipelines in total.
 
 ## Key Decisions
 
@@ -101,10 +106,10 @@ def retry_db(fn, max_retries=5, description="operation"):
 
 ## Metrics
 
-- **Asset-task volume:** ~2.2M rows ingested per night (raw JSONB ~2.4 GB).
-- **Server-side transform:** 2.2M rows transformed in ~2–3 minutes, down from ~44 minutes when the same logic ran in Python.
-- **Analytics surface:** ~17 staging tables and 9 materialized views feeding dashboards and the assistant.
-- **Schema evolution:** ~100 numbered SQL migrations (001 → 098) across six schemas.
+- **Warehouse scale:** ~12.2M rows across 111 tables in six schemas (`data_raw` 29, `data_staging` 41, `analytics` 12, plus `reference`, `pipeline`, `agent`).
+- **Core dataset:** `stg_asset_tasks` ~2.6M rows, transformed server-side in ~2–3 minutes — down from ~44 minutes when the same logic ran in Python.
+- **Biggest tables:** `stg_asset_tasks` (2.6M), `raw_timer_activities` (830k), `raw_daily_reports` (674k), `invoice_audit_clean` (609k).
+- **Schema evolution:** ~100 numbered SQL migrations (001 → 098) across the six schemas.
 
 ## What I Learned
 
