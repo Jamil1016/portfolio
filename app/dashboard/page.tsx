@@ -1,5 +1,9 @@
+import "../home.css";
+import "./dashboard.css";
 import { createServerClient } from "@/lib/supabase/server";
-import { WeekCard, type WeekRow } from "@/components/tracker/WeekCard";
+import { SiteHeader } from "@/components/home/SiteHeader";
+import { TrackerBoard } from "@/components/tracker/TrackerBoard";
+import type { TrackerWeek } from "@/components/tracker/WeekRow";
 
 export const dynamic = "force-dynamic";
 
@@ -10,37 +14,28 @@ export default async function Dashboard() {
     .select("*")
     .order("sort_order", { ascending: true });
 
-  const weeks = (data ?? []) as WeekRow[];
-  const phases = Array.from(new Set(weeks.map((w) => w.phase)));
-
-  const totalCount = weeks.filter((w) => w.phase !== "Capstone").length;
-  const doneCount = weeks.filter((w) => w.status === "done" && w.phase !== "Capstone").length;
+  const weeks = (data ?? []) as TrackerWeek[];
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold text-slate-50">Learning tracker</h1>
-        <span className="font-mono text-sm text-slate-400">
-          {doneCount} / {totalCount} weeks
-        </span>
-      </header>
-
-      <div className="mt-8 space-y-10">
-        {phases.map((phase) => (
-          <section key={phase}>
-            <h2 className="font-mono text-xs uppercase tracking-wide text-slate-500">
-              {phase}
-            </h2>
-            <div className="mt-3 space-y-3">
-              {weeks
-                .filter((w) => w.phase === phase)
-                .map((w) => (
-                  <WeekCard key={w.id} week={w} />
-                ))}
+    <div className="home-shell">
+      <SiteHeader
+        cta={
+          <a className="btn ghost" href="/">
+            View site ↗
+          </a>
+        }
+      />
+      <main>
+        <div className="wrap" style={{ paddingBottom: "96px" }}>
+          <div className="trk-intro">
+            <div className="eyebrow">
+              <span className="dot" /> Private · Learning control surface
             </div>
-          </section>
-        ))}
-      </div>
-    </main>
+            <h1>Learning tracker</h1>
+          </div>
+          <TrackerBoard weeks={weeks} />
+        </div>
+      </main>
+    </div>
   );
 }
