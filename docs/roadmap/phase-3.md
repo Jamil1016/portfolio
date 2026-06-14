@@ -26,7 +26,7 @@ Add dbt and Airflow to your toolbox by applying them directly to the Report Auto
 **Ships:** DAG file + a local-run log showing E2E success.
 **Build steps:** ① map each `pipeline.yml` stage to an Airflow task operator → ② write the DAG file with correct dependencies and scheduling → ③ add task-level retry/backfill configuration → ④ run the DAG locally on a sample data slice and confirm E2E completion → ⑤ capture the run log and commit DAG + log.
 
-## <a id="cert-dbt"></a>dbt Analytics Engineering Certification
+## <a id="cert-dbt"></a>dbt Analytics Engineering Certification  `SUPPORT`
 
 This is a certification milestone, not a weekly build project.
 

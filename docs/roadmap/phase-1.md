@@ -1,6 +1,6 @@
 # Phase 1 — Master your existing stack
 
-Deepen engineering rigour on the systems already in production: build a proper eval harness so every DARA/Guardian change has a measurable before/after signal.
+Deepen engineering rigour on the systems already in production: build a proper eval harness so every DARA/Guardian change has a measurable before/after signal. Week numbering follows the external course sequence — the first calendar weeks (0a–0h) are front-loaded in Phase 0, so this phase begins at Week 2.
 
 ## <a id="week-2"></a>Week 2 — Anthropic courses (prompting + evals)  `BUILD`
 

@@ -18,7 +18,7 @@ Understand how your current Supabase/GHA stack maps onto GCP's managed services,
 **Ships:** architecture diagram + a rationale doc.
 **Build steps:** ① draw DARA's current architecture (components, data flows, hosting) → ② re-draw it on GCP (Cloud Run for DARA, BigQuery for analytics, Vertex AI for LLM, Pub/Sub for events) → ③ annotate one realistic failure mode per component → ④ write a rationale explaining the key design decisions → ⑤ commit diagram + rationale.
 
-## <a id="cert-gcp-pde"></a>GCP Professional Data Engineer Certification
+## <a id="cert-gcp-pde"></a>GCP Professional Data Engineer Certification  `SUPPORT`
 
 This is a certification milestone, not a weekly build project.
 

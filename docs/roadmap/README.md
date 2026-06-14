@@ -18,7 +18,7 @@ names / financials out of this public repo.
 - [Phase 4 — Cloud + GenAI fluency](phase-4.md)
 - [Phase 5 — Optional depth](phase-5.md)
 
-## <a id="capstone"></a>Capstone — Public writeup
+## <a id="capstone"></a>Capstone — Public writeup  `BUILD`
 
 **Learn:** technical writing; architecture narrative; presenting evals/safety/observability.
 **Measure:** a published writeup with architecture diagram, eval harness, RAG/agent vocab, GCP comparison.
