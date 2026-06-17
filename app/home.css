@@ -1,4 +1,4 @@
-/* Portfolio Home — "Field Notes × Control Surface"
+/* Portfolio Home: "Field Notes × Control Surface"
    Cream-paper editorial serif on a Swiss grid. Themes: cream / dark / colorful.
    Ported from the design session; all selectors scoped under .home-shell so
    the rest of the app (dashboard/about/resume) keeps its own styling. */
@@ -345,14 +345,14 @@ html { scroll-padding-top: 73px; }
 .home-shell .contact-line a { color: var(--strong); text-decoration: none; }
 .home-shell .contact-line a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
-/* how I work — principle cards */
+/* how I work: principle cards */
 .home-shell .principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .home-shell .principle { border: 1px solid var(--line); background: var(--card); padding: 26px 28px; }
 .home-shell .principle .pn { font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); }
 .home-shell .principle h3 { font-family: var(--font-serif), serif; font-weight: 400; font-size: 25px; line-height: 1.1; margin: 12px 0 10px; color: var(--strong); }
 .home-shell .principle p { margin: 0; color: var(--dim); font-size: 14.5px; line-height: 1.6; }
 
-/* career highlights — quantified achievements */
+/* career highlights: quantified achievements */
 .home-shell .highlights { border-top: 1px solid var(--rule); }
 .home-shell .hl-row {
   display: grid; grid-template-columns: 230px 1fr; gap: 40px;

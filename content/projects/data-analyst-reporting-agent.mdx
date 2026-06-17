@@ -1,8 +1,8 @@
 ## The Problem
 
-Operations leaders wanted to ask the warehouse questions in plain English — "how many people are on leave today", "task completion rate for the new project this month" — and get a trustworthy number back without filing a ticket or learning SQL. The existing dashboards were rigid, and the prior generation of this tool (a FastAPI + Plotly service) generated SQL freely with no real access boundary.
+Operations leaders wanted to ask the warehouse questions in plain English (think "how many people are on leave today" or "task completion rate for the new project this month") and get a trustworthy number back without filing a ticket or learning SQL. The existing dashboards were rigid, and the prior generation of this tool (a FastAPI + Plotly service) generated SQL freely with no real access boundary.
 
-The hard parts were never SQL generation — modern models write SQL fluently. The hard parts were: keeping a helpful-but-imperfect model from touching anything it shouldn't, stopping it from hallucinating column names against a 100+ view warehouse, and — the one that actually matters for a multi-team org — making sure a workforce-scoped user physically cannot read field-ops rows, even if the model tries. That last requirement is what drove the rewrite.
+The hard parts were never SQL generation. Modern models write SQL fluently. The hard parts were: keeping a helpful-but-imperfect model from touching anything it shouldn't, stopping it from hallucinating column names against a 100+ view warehouse, and, the one that actually matters for a multi-team org, making sure a workforce-scoped user physically cannot read field-ops rows, even if the model tries. That last requirement is what drove the rewrite.
 
 ## Architecture
 
@@ -24,25 +24,25 @@ graph TD
 
 The loop runs at most 8 iterations against `claude-sonnet-4-6` with a prompt-cached system prompt and 4096 max output tokens, accumulating per-turn token usage and cost. It exposes five tools (`lib/agent/tools/index.ts`): `run_sql` (ad-hoc), `get_metric` (run a defined metric's canonical SQL template), `describe_view` (column lookup from `agent.schema_metadata` so the model confirms real column names instead of guessing), `clarify` (stop and ask the user to disambiguate), and `finalize_answer` (emit the structured response card the UI renders directly). The loop short-circuits the moment the model calls `clarify` or `finalize_answer`; otherwise tool results are fed back as the next user turn. It's a hand-rolled loop rather than the SDK runner specifically so each iteration can be audit-logged and short-circuited.
 
-It's a multi-turn chat product — sessions and turns persist to `agent.chat_sessions` / `agent.chat_messages`, and every turn writes one row to `agent.query_audit_log` (rendered SQL, row count, latency, model, tokens, cost). The audit write is the *only* place the service-role client is used; every read that serves a user request goes through the JWT'd client.
+It's a multi-turn chat product. Sessions and turns persist to `agent.chat_sessions` / `agent.chat_messages`, and every turn writes one row to `agent.query_audit_log` (rendered SQL, row count, latency, model, tokens, cost). The audit write is the *only* place the service-role client is used; every read that serves a user request goes through the JWT'd client.
 
 ## Key Decisions
 
-**Defense in depth — three real, independent layers, all grounded in the DB.** This is the headline change from the Gen-1 app.
+**Defense in depth: three real, independent layers, all grounded in the DB.** This is the headline change from the Gen-1 app.
 
-1. **A keyword/regex SQL guardrail** (`lib/agent/guardrails/sql-allowlist.ts`) — the last line before SQL hits the wire. SELECT/`WITH`-only, multi-statement blocking, ~40 forbidden top-level keywords, forbidden functions (`pg_sleep`, `dblink`, `lo_export`, …), a schema allowlist (`analytics`, `data_staging`, `reference`) plus an explicit denylist, and auto-injection of `LIMIT 1000` when the query lacks a top-level limit. It strips comments and string literals first so the keyword scan can't be fooled by a `DROP` inside a quoted string.
-2. **A locked-down RPC** — `agent.execute_user_query(text)` runs `SECURITY INVOKER` (so RLS applies as the caller), with `statement_timeout = 30s` and `search_path = pg_catalog` to kill runaway queries and schema-shadowing tricks.
-3. **Row-Level Security keyed to the user's JWT.** Per-view policies call `agent.current_user_can_see(domain)`, which checks the signed-in user's `data_scope.domains`. A workforce-scoped user simply gets zero field-ops rows back — the boundary is the database, not the application. Reads never use service-role.
+1. **A keyword/regex SQL guardrail** (`lib/agent/guardrails/sql-allowlist.ts`), the last line before SQL hits the wire. SELECT/`WITH`-only, multi-statement blocking, ~40 forbidden top-level keywords, forbidden functions (`pg_sleep`, `dblink`, `lo_export`, …), a schema allowlist (`analytics`, `data_staging`, `reference`) plus an explicit denylist, and auto-injection of `LIMIT 1000` when the query lacks a top-level limit. It strips comments and string literals first so the keyword scan can't be fooled by a `DROP` inside a quoted string.
+2. **A locked-down RPC.** `agent.execute_user_query(text)` runs `SECURITY INVOKER` (so RLS applies as the caller), with `statement_timeout = 30s` and `search_path = pg_catalog` to kill runaway queries and schema-shadowing tricks.
+3. **Row-Level Security keyed to the user's JWT.** Per-view policies call `agent.current_user_can_see(domain)`, which checks the signed-in user's `data_scope.domains`. A workforce-scoped user simply gets zero field-ops rows back. The boundary is the database, not the application. Reads never use service-role.
 
-The guardrail isn't there because the model is adversarial; it's there because an LLM is *imperfect* and will occasionally be helpfully wrong. RLS is there for when the guardrail isn't enough — it's the trust boundary that survives any application bug.
+The guardrail isn't there because the model is adversarial; it's there because an LLM is *imperfect* and will occasionally be helpfully wrong. RLS is there for when the guardrail isn't enough. It's the trust boundary that survives any application bug.
 
-**Defined-metric templates over free SQL where a metric exists.** A semantic layer (`lib/semantic-layer/`: metric definitions, business rules, glossary, schema metadata) backs a library of 37 vetted metrics across 6 domains (workforce, field ops, finance, quality, compliance, packages). Each carries a canonical SQL formula, synonyms, caveats, and source views. When a question maps to a known metric, `get_metric` renders the agreed formula with parameters — so "attendance rate" always means the same thing, regardless of how the model would have improvised it.
+**Defined-metric templates over free SQL where a metric exists.** A semantic layer (`lib/semantic-layer/`: metric definitions, business rules, glossary, schema metadata) backs a library of 37 vetted metrics across 6 domains (workforce, field ops, finance, quality, compliance, packages). Each carries a canonical SQL formula, synonyms, caveats, and source views. When a question maps to a known metric, `get_metric` renders the agreed formula with parameters, so "attendance rate" always means the same thing, regardless of how the model would have improvised it.
 
 **`describe_view` to stop column hallucination.** Rather than dump the whole catalog into context, the model calls `describe_view` to pull just the columns it needs from `agent.schema_metadata` (896 catalogued column rows) before writing ad-hoc SQL. This was a direct fix for the model thrashing on column-name guesses.
 
 ## Code Samples
 
-The guardrail's core — sanitize first, then enforce SELECT-only, the schema denylist, and a forced `LIMIT` (trimmed from `lib/agent/guardrails/sql-allowlist.ts`):
+The guardrail's core sanitizes first, then enforces SELECT-only, the schema denylist, and a forced `LIMIT` (trimmed from `lib/agent/guardrails/sql-allowlist.ts`):
 
 ```typescript
 export function validateAndPrepareSql(
@@ -92,7 +92,7 @@ export function validateAndPrepareSql(
 }
 ```
 
-The RPC that actually runs the vetted SQL — the layer where RLS and the timeout bite (`supabase/migrations/…_execute_user_query_rpc.sql`):
+The RPC that actually runs the vetted SQL, the layer where RLS and the timeout bite (`supabase/migrations/…_execute_user_query_rpc.sql`):
 
 ```sql
 CREATE OR REPLACE FUNCTION agent.execute_user_query(p_sql text)
@@ -115,21 +115,21 @@ GRANT  EXECUTE ON FUNCTION agent.execute_user_query(text) TO authenticated, serv
 
 These are the verifiable facts about the system, not performance claims:
 
-- **37 defined metrics across 6 domains** — 10 in the V1 seed, 27 more added in Phase-2 migrations (workforce, field ops, finance, quality, compliance, packages), each with a canonical SQL formula, synonyms, caveats, and source views.
-- **22-case SQL-guardrail test suite** (`scripts/test-guardrails.ts`) — covers happy-path SELECT/WITH/subquery/alias cases plus rejections for DROP/INSERT/UPDATE/DELETE/TRUNCATE/SET, multiple statements, six denied schemas, `pg_sleep`, and `WITH … DELETE`.
+- **37 defined metrics across 6 domains**: 10 in the V1 seed, 27 more added in Phase-2 migrations (workforce, field ops, finance, quality, compliance, packages), each with a canonical SQL formula, synonyms, caveats, and source views.
+- **22-case SQL-guardrail test suite** (`scripts/test-guardrails.ts`) covers happy-path SELECT/WITH/subquery/alias cases plus rejections for DROP/INSERT/UPDATE/DELETE/TRUNCATE/SET, multiple statements, six denied schemas, `pg_sleep`, and `WITH … DELETE`.
 - **896-row semantic layer** of per-column metadata (`agent.schema_metadata`) backing `describe_view`.
-- **Bounded execution** — agent loop capped at 8 iterations; queries forced to `LIMIT 1000` and a 30s statement timeout.
-- **Per-turn observability** — model, tokens (incl. cache read/creation), cost in USD, latency, rendered SQL, and row count logged to `agent.query_audit_log` on every question.
+- **Bounded execution**: agent loop capped at 8 iterations; queries forced to `LIMIT 1000` and a 30s statement timeout.
+- **Per-turn observability**: model, tokens (incl. cache read/creation), cost in USD, latency, rendered SQL, and row count logged to `agent.query_audit_log` on every question.
 
 ## What I Learned
 
-- **The access boundary belongs in the database, not the agent.** The Gen-1 app trusted a SQL validator. The validator is still here — but it's now the *outermost* of three layers, and the one I trust least. RLS keyed to the user's JWT means a scope mismatch returns zero rows by construction; no amount of clever prompting gets a workforce user into field-ops data.
-- **Defined metrics beat clever generation.** Letting the model improvise SQL for "attendance rate" gave subtly different answers run to run. A `get_metric` template guarantees the agreed formula every time — the model's job shrinks to *picking* the metric and its parameters.
-- **Hallucinated columns, not hallucinated logic, were the real failure mode.** Giving the model a `describe_view` tool over catalogued column metadata — instead of dumping the schema or letting it guess — was the single biggest reliability win for ad-hoc questions.
+- **The access boundary belongs in the database, not the agent.** The Gen-1 app trusted a SQL validator. The validator is still here, but it's now the *outermost* of three layers, and the one I trust least. RLS keyed to the user's JWT means a scope mismatch returns zero rows by construction; no amount of clever prompting gets a workforce user into field-ops data.
+- **Defined metrics beat clever generation.** Letting the model improvise SQL for "attendance rate" gave subtly different answers run to run. A `get_metric` template guarantees the agreed formula every time; the model's job shrinks to *picking* the metric and its parameters.
+- **Hallucinated columns, not hallucinated logic, were the real failure mode.** Giving the model a `describe_view` tool over catalogued column metadata, instead of dumping the schema or letting it guess, was the single biggest reliability win for ad-hoc questions.
 - **A manual tool loop earns its keep when you need observability.** Hand-rolling the loop (rather than the SDK runner) is what makes per-iteration audit logging, token accounting, and clarify/finalize short-circuiting possible.
 
 ## Links
 
-**Status:** coming soon. This is the TypeScript/Next.js rewrite that replaces the prior Gen-1 FastAPI + Plotly app — same product surface, an actual database-grounded trust boundary underneath.
+**Status:** coming soon. This is the TypeScript/Next.js rewrite that replaces the prior Gen-1 FastAPI + Plotly app: same product surface, an actual database-grounded trust boundary underneath.
 
 [GitHub repo](https://github.com/Jamil1016/data-analyst-reporting-agent)

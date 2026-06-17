@@ -2,7 +2,7 @@ import "../home.css";
 import { SiteHeader } from "@/components/home/SiteHeader";
 import { GITHUB_URL, CONTACT_EMAIL } from "@/lib/site-data";
 
-export const metadata = { title: "Resume — Jamil Mendez" };
+export const metadata = { title: "Resume | Jamil Mendez" };
 
 const PRINCIPLES = [
   {
@@ -13,12 +13,12 @@ const PRINCIPLES = [
   {
     n: "02",
     title: "Validate counts as a first-class signal",
-    body: "The worst bugs don't error — they silently return fewer rows. I treat row-count reconciliation and data-quality checks as core features, not afterthoughts.",
+    body: "The worst bugs don't error. They silently return fewer rows. I treat row-count reconciliation and data-quality checks as core features, not afterthoughts.",
   },
   {
     n: "03",
     title: "Only count it learned once it ships",
-    body: "I keep a structured roadmap, but a course isn't done until the idea lands in a production system — evals, safety rails, and observability included.",
+    body: "I keep a structured roadmap, but a course isn't done until the idea lands in a production system: evals, safety rails, and observability included.",
   },
 ];
 
@@ -47,7 +47,7 @@ const HIGHLIGHTS = [
     text: (
       <>
         Built a resumable, two-pool downloader that pulls an entire org&rsquo;s requirement
-        PDFs over a paginated API — <strong>2,866 files / 3.4 GB in one ~61-minute run</strong>,
+        PDFs over a paginated API: <strong>2,866 files / 3.4 GB in one ~61-minute run</strong>,
         recovering cleanly from a mid-run network outage.
       </>
     ),
@@ -79,7 +79,7 @@ const DECISIONS = [
     d: (
       <>
         The upstream API silently truncated wide date ranges at ~1,000 rows. One call
-        per calendar day bypassed it entirely — <em>zero silent data loss</em> at the cost
+        per calendar day bypassed it entirely, <em>zero silent data loss</em> at the cost
         of more requests.
       </>
     ),
@@ -107,7 +107,7 @@ const DECISIONS = [
     t: "Write-once derived IDs",
     d: (
       <>
-        Once a foreign-key resolution lands on a row it never changes — surviving
+        Once a foreign-key resolution lands on a row it never changes, surviving
         truncate-and-reload without cascading rewrites downstream.
       </>
     ),
@@ -133,14 +133,13 @@ export default function Resume() {
             <p className="sub">
               The home page has the metrics and the project grid. This is how I think,
               the wins I&rsquo;m proudest of, and a look under the hood of the flagship
-              system — the parts a résumé bullet can&rsquo;t hold.
+              system, the parts a résumé bullet can&rsquo;t hold.
             </p>
             <div className="contact-line">
               <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
                 github.com/Jamil1016
               </a>
-              <span>jamilmendez.dev</span>
             </div>
           </div>
         </section>
@@ -192,7 +191,7 @@ export default function Resume() {
             <p className="dd-lead">
               Nightly ingestion of millions of rows from a third-party API into a Postgres
               warehouse that feeds dashboards and AI agents. It had to be{" "}
-              <strong>parallel, idempotent, and observable</strong> — one extractor failing
+              <strong>parallel, idempotent, and observable</strong>. One extractor failing
               couldn&rsquo;t take down the rest, and a re-run had to produce the same result
               every time. Here are the decisions that made that true.
             </p>
@@ -206,7 +205,7 @@ export default function Resume() {
             </div>
             <div className="dd-foot">
               <a className="link-u" href="/projects/local-pipeline">
-                Read the full case study — architecture diagram + code →
+                Read the full case study: architecture diagram + code →
               </a>
             </div>
           </div>
@@ -215,7 +214,7 @@ export default function Resume() {
 
       <footer>
         <div className="wrap foot">
-          <span>© 2026 Jamil Mendez · jamilmendez.dev</span>
+          <span>© 2026 Jamil Mendez</span>
           <span>
             <a href="/">Home</a>
             <a href={`mailto:${CONTACT_EMAIL}`}>Email</a>

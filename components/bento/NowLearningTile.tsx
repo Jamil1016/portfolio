@@ -44,7 +44,7 @@ export async function NowLearningTile() {
           </a>
         </>
       ) : (
-        <p className="text-lg text-slate-50">Between weeks — planning the next push.</p>
+        <p className="text-lg text-slate-50">Between weeks. Planning the next push.</p>
       )}
     </BentoTile>
   );

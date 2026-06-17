@@ -66,7 +66,7 @@ export function TrackerBoard({ weeks }: { weeks: TrackerWeek[] }) {
               </div>
             </>
           ) : (
-            <p className="none">Nothing in progress — pick an item below to start.</p>
+            <p className="none">Nothing in progress. Pick an item below to start.</p>
           )}
         </div>
       </section>

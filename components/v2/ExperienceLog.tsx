@@ -2,14 +2,14 @@ type Entry = { range: string; role: string; description: string; current?: boole
 
 const ENTRIES: Entry[] = [
   {
-    range: "2024 — Present",
+    range: "2024 – Present",
     role: "Data + AI Engineer",
     description:
       "Build and operate the team's data platform: nightly ETL (6.2M+ rows), an in-house NL→SQL analytics agent (DARA), and the auto-remediation pipeline guardian. Cut incident-class on-call burden by an order of magnitude.",
     current: true,
   },
   {
-    range: "2022 — 2024",
+    range: "2022 – 2024",
     role: "Data Analyst",
     description:
       "Owned ad-hoc reporting and led the analytics-schema rebuild that became the foundation for the current platform.",

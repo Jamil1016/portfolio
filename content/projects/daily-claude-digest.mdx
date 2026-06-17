@@ -1,8 +1,8 @@
 ## The Problem
 
-Keeping up with "all things Claude" — official Anthropic releases, the engineering blog, community signal on Reddit and Hacker News, plus my own usage and yesterday's commits — meant checking a dozen places by hand every morning, or just not keeping up. I wanted one high-signal HTML briefing in my inbox at 1 PM Philippines time: curated, never padded with filler, and never fabricated. The hard part isn't sending an email; it's that the sources are scattered, some are unreliable, and the thing doing the curating has to know when to stay quiet rather than invent content.
+Keeping up with "all things Claude" (official Anthropic releases, the engineering blog, community signal on Reddit and Hacker News, plus my own usage and yesterday's commits) meant checking a dozen places by hand every morning, or just not keeping up. I wanted one high-signal HTML briefing in my inbox at 1 PM Philippines time: curated, never padded with filler, and never fabricated. The hard part isn't sending an email; it's that the sources are scattered, some are unreliable, and the thing doing the curating has to know when to stay quiet rather than invent content.
 
-So the design makes Claude the curator and a scheduled routine the trigger. The model reads whatever the fetchers managed to pull, selects what matters, and renders a sectioned digest — and if a source is down, that section simply doesn't appear.
+So the design makes Claude the curator and a scheduled routine the trigger. The model reads whatever the fetchers managed to pull, selects what matters, and renders a sectioned digest. If a source is down, that section simply doesn't appear.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ graph TD
   CL --> SE[send_email.py<br/>Gmail OAuth]
 `}</MermaidDiagram>
 
-`fetch_sources.py` runs four kinds of fetcher — an HTML scraper, the Reddit API, the HN Algolia API, and an X mirror — across three tiers of sources plus a personal tier (Anthropic Admin API usage stats, `git log` across four repos, and a local work log). Every fetcher returns `[]` on failure instead of raising, so one dead source degrades the digest rather than killing the run. `compose_digest.py` then makes a single `claude-sonnet-4-6` call whose system prompt is the entire digest spec — seven sections, hard rules, and the visual design — and parses the JSON it returns into a subject + HTML body. `send_email.py` sends it via Gmail OAuth.
+`fetch_sources.py` runs four kinds of fetcher, an HTML scraper, the Reddit API, the HN Algolia API, and an X mirror, across three tiers of sources plus a personal tier (Anthropic Admin API usage stats, `git log` across four repos, and a local work log). Every fetcher returns `[]` on failure instead of raising, so one dead source degrades the digest rather than killing the run. `compose_digest.py` then makes a single `claude-sonnet-4-6` call whose system prompt is the entire digest spec: seven sections, hard rules, and the visual design. It parses the JSON it returns into a subject + HTML body. `send_email.py` sends it via Gmail OAuth.
 
 The scheduler is a [Claude Routine](https://docs.claude.com) (serverless cron + Gmail connector), with a local Python harness (`test_locally.py`) for `--dry-run` / `--send` development.
 
@@ -33,12 +33,12 @@ The scheduler is a [Claude Routine](https://docs.claude.com) (serverless cron + 
 - **Claude is the curator, not the cron.** The runtime is just a trigger; all judgment about what's worth including lives in the model plus a 122-line system prompt. Iterating on the digest's shape is a prompt edit, not a code change.
 - **Prompt-as-code.** The seven sections, the "never fabricate / fail soft" rules, and the HTML design guidelines all live in `prompts/daily_digest_prompt.md` and `config/email_design.md`. The Python only fetches inputs and ships outputs.
 - **Fail-soft everywhere.** Fetchers catch their own HTTP errors and return empty; the prompt instructs Claude to omit any section with no data. The digest always sends, even if Reddit or HN is unreachable.
-- **Sonnet by default, overridable.** `claude-sonnet-4-6` balances cost and latency for what is a composition task, not a reasoning one — and `CLAUDE_DIGEST_MODEL` lets local runs swap it.
+- **Sonnet by default, overridable.** `claude-sonnet-4-6` balances cost and latency for what is a composition task, not a reasoning one, and `CLAUDE_DIGEST_MODEL` lets local runs swap it.
 - **Config over code.** Sources (15+ URLs, tiered) and the 18-tip pool are YAML, each tip carrying a weight and provenance so selection is data-driven and editable without touching Python.
 
 ## Code Samples
 
-The composition call — the system prompt *is* the digest spec, concatenated with the visual design guide, and the model returns structured JSON:
+The composition call: the system prompt *is* the digest spec, concatenated with the visual design guide, and the model returns structured JSON.
 
 ```python
 client = Anthropic(api_key=api_key)
@@ -60,7 +60,7 @@ response = client.messages.create(
 return _parse_response(response.content[0].text if response.content else "")
 ```
 
-Fail-soft fetching — any source that errors returns `None` and is skipped, never aborting the run:
+Fail-soft fetching means any source that errors returns `None` and is skipped, never aborting the run:
 
 ```python
 def _http_get(url, *, timeout=DEFAULT_TIMEOUT, headers=None):
@@ -83,7 +83,7 @@ These are verifiable facts about the system, not measured outcomes:
 
 - **~685 lines** of core Python across 4 modules (`fetch_sources` 246, `compose_digest` 195, `test_locally` 174, `send_email` 70)
 - **7 direct dependencies** (`anthropic`, `httpx`, `pyyaml`, `python-dotenv`, `beautifulsoup4`, `google-api-python-client`, `google-auth-oauthlib`)
-- **15+ source URLs** across three tiers — 6 official, 4 press, 3 community — plus a personal tier (Admin API + `git log` across 4 repos)
+- **15+ source URLs** across three tiers (6 official, 4 press, 3 community) plus a personal tier (Admin API + `git log` across 4 repos)
 - **18 curated tips** in a weighted YAML pool
 - **`claude-sonnet-4-6`**, single composition call, **8192** max tokens
 - **Up to 7 email sections** (hero, what's new, community, tip of the day, usage, wins, things to know)
@@ -91,9 +91,9 @@ These are verifiable facts about the system, not measured outcomes:
 
 ## What I Learned
 
-- **Put the judgment in the prompt, the plumbing in the code.** Encoding the digest structure and the "never fabricate" rules as a system prompt made the whole thing tunable without redeploys — the Python never had to know what a "section" was.
+- **Put the judgment in the prompt, the plumbing in the code.** Encoding the digest structure and the "never fabricate" rules as a system prompt made the whole thing tunable without redeploys. The Python never had to know what a "section" was.
 - **Fail-soft beats correct-or-nothing for a daily artifact.** A briefing that's 80% complete and always arrives is far more useful than one that's perfect when every source happens to be up. Returning `[]` instead of raising was the single most important reliability decision.
-- **A serverless routine is the right host for a once-a-day job.** No laptop, no GitHub Actions minutes, OAuth handled by the connector — the scheduling concern essentially disappears.
+- **A serverless routine is the right host for a once-a-day job.** No laptop, no GitHub Actions minutes, OAuth handled by the connector: the scheduling concern essentially disappears.
 
 ## Links
 

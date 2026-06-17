@@ -2,7 +2,7 @@
 
 Producing Ontel's quotes was a manual chain: pull the worklist of asset tasks, match each invoice line to the right asset metadata (parse a Site ID into subcon / GC / carrier / market / project / fuze ID), pick the correct priced service rate when several apply, build a branded A4 PDF by hand, and email it to the right recipients looked up by hand. Across a few hundred tasks at a time, it was slow, inconsistent, and easy to get wrong on either the pricing or the recipient.
 
-This app turns that chain into a reviewed, batched workflow: a queue reads the worklist and invoice options straight from the data platform, the operator overrides and verifies categories, then PDFs are generated to Drive and emails staged as Gmail drafts — in bulk, with a live view of who else is working alongside you.
+This app turns that chain into a reviewed, batched workflow: a queue reads the worklist and invoice options straight from the data platform, the operator overrides and verifies categories, then PDFs are generated to Drive and emails staged as Gmail drafts, in bulk, with a live view of who else is working alongside you.
 
 ## Architecture
 
@@ -24,20 +24,20 @@ graph TD
   PR[Supabase Realtime<br/>presence] -.live roster.-> Q
 `}</MermaidDiagram>
 
-The Queue page calls `getQuoteData()`, which merges the `v_quote_review` analytics view (source data + parsed enrichment + operator overrides + directory matches), the invoice-option choices, generated-PDF state, and email history — filtering out anything already sent. The operator overrides fields (GC, carrier, market, project, service rate) and verifies a row. `/api/quote-pdf/bulk` renders the same `<QuoteDocument>` used for on-screen preview to a buffer via `@react-pdf` on the Node runtime, uploads concurrently to a Drive folder, and streams NDJSON progress. `/api/email-queue/schedule` renders TipTap email templates to Gmail MIME and creates **drafts** (not sends) in each user's OAuth'd account. A Supabase Realtime presence channel shows who's in the app and on which page.
+The Queue page calls `getQuoteData()`, which merges the `v_quote_review` analytics view (source data + parsed enrichment + operator overrides + directory matches), the invoice-option choices, generated-PDF state, and email history, filtering out anything already sent. The operator overrides fields (GC, carrier, market, project, service rate) and verifies a row. `/api/quote-pdf/bulk` renders the same `<QuoteDocument>` used for on-screen preview to a buffer via `@react-pdf` on the Node runtime, uploads concurrently to a Drive folder, and streams NDJSON progress. `/api/email-queue/schedule` renders TipTap email templates to Gmail MIME and creates **drafts** (not sends) in each user's OAuth'd account. A Supabase Realtime presence channel shows who's in the app and on which page.
 
 ## Key Decisions
 
 - **One SQL view, not N+1 queries.** `v_quote_review` joins tasks, invoice options, overrides, and the directory in the database; the app loads it once and merges generated/email state client-side. The product is read-heavy and de-normalized on purpose.
 - **Field-level overrides with read-modify-write.** `setOverride` merges the existing row before upserting a single field, so two operators editing different fields on the same task never clobber each other's work.
-- **Server-side PDF via `@react-pdf`, no headless browser.** The same component renders both the live preview and the server-side PDF to a buffer, uploaded straight to Drive — serverless-friendly and deterministic.
+- **Server-side PDF via `@react-pdf`, no headless browser.** The same component renders both the live preview and the server-side PDF to a buffer, uploaded straight to Drive. Serverless-friendly and deterministic.
 - **Gmail drafts, not direct sends.** The app stages drafts in the user's account; the human stays in control of the actual send. It's auditable and avoids bounce/spam pitfalls.
-- **Validate before any I/O.** Bulk generation blocks rows with no price or no match (HTTP 422) before rendering or uploading a single PDF — fail early, run the good ones in parallel.
+- **Validate before any I/O.** Bulk generation blocks rows with no price or no match (HTTP 422) before rendering or uploading a single PDF: fail early, run the good ones in parallel.
 - **Real-time presence for team coordination.** A `usePresence()` hook broadcasts user + page + idle status on a Supabase Realtime channel so the team can see who's working where and avoid duplicate effort.
 
 ## Code Samples
 
-Field-level override — merge existing state, then upsert by `task_did`, so a single-field edit never wipes a teammate's:
+Field-level override: merge existing state, then upsert by `task_did`, so a single-field edit never wipes a teammate's:
 
 ```typescript
 export async function setOverride(taskDid: string, field: string, value: string | null) {
@@ -98,7 +98,7 @@ These are verifiable facts about the system, not measured outcomes:
 
 - **Push the join into the database.** Assembling the review surface as one analytics view instead of stitching it in the app removed a class of N+1 problems and made the queue load in a single round trip.
 - **Make concurrent edits safe by construction.** Read-modify-write on a single override field is a tiny pattern that quietly prevents the "two people, one task, lost edit" bug that real-time collaboration would otherwise invite.
-- **Draft, don't send.** Generating Gmail drafts instead of firing emails kept a human in the loop on the highest-stakes step and made the whole pipeline auditable — the right default for anything customer-facing.
+- **Draft, don't send.** Generating Gmail drafts instead of firing emails kept a human in the loop on the highest-stakes step and made the whole pipeline auditable. It's the right default for anything customer-facing.
 
 ## Links
 

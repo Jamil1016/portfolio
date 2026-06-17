@@ -12,12 +12,12 @@ const serif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Jamil Mendez — Data + AI Engineer",
+  title: "Jamil Mendez | Data + AI Engineer",
   description:
     "Engineer building production data pipelines and AI agents. Portfolio, projects, and learning log.",
   metadataBase: new URL("https://jamilmendez.dev"),
   openGraph: {
-    title: "Jamil Mendez — Data + AI Engineer",
+    title: "Jamil Mendez | Data + AI Engineer",
     description: "Portfolio, projects, and learning log.",
     images: ["/og-image.png"],
   },

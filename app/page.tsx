@@ -29,7 +29,7 @@ export default function HomePage() {
 
       <footer data-screen-label="Footer">
         <div className="wrap foot">
-          <span>© 2026 Jamil Mendez · jamilmendez.dev</span>
+          <span>© 2026 Jamil Mendez</span>
           <span>
             <a href="#work" data-tablink="work">Work</a>
             <a href="#stack" data-tablink="stack">Stack</a>

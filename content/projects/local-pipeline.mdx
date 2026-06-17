@@ -1,8 +1,8 @@
 ## The Problem
 
-Nightly ingestion of millions of rows from the Swift Projects API (plus Gmail, Google Calendar, and Google Forms) into a Postgres warehouse, feeding analytics views consumed by internal dashboards and an AI assistant. The naive approach — a single Python script pulling everything sequentially — took roughly six hours, regularly timed out, and silently dropped data when the upstream API returned more than ~1,000 rows for a single date range.
+Nightly ingestion of millions of rows from the Swift Projects API (plus Gmail, Google Calendar, and Google Forms) into a Postgres warehouse, feeding analytics views consumed by internal dashboards and an AI assistant. The naive approach, a single Python script pulling everything sequentially, took roughly six hours, regularly timed out, and silently dropped data when the upstream API returned more than ~1,000 rows for a single date range.
 
-Today it's ~14 scheduled pipelines (counted by data source) — asset-tasks (the nightly core), orgs/projects, timer, user-priorities, QA forms, daily reports, Gmail revenue (AR-aging + sales), calendar-leave, timer-discrepancies, timer duplicate-resolve, targeted asset-tasks, and the invoicing/quote feed — plus dispatches into the date-validator and gmail-scraper systems. Each must be parallel, idempotent, and observable: one extractor failing can't take down the others, and re-running produces the same result every time.
+Today it's ~14 scheduled pipelines (counted by data source): asset-tasks (the nightly core), orgs/projects, timer, user-priorities, QA forms, daily reports, Gmail revenue (AR-aging + sales), calendar-leave, timer-discrepancies, timer duplicate-resolve, targeted asset-tasks, and the invoicing/quote feed, plus dispatches into the date-validator and gmail-scraper systems. Each must be parallel, idempotent, and observable: one extractor failing can't take down the others, and re-running produces the same result every time.
 
 ## Architecture
 
@@ -17,11 +17,11 @@ graph LR
   BF --> AN[(analytics<br/>views + MVs)]
 `}</MermaidDiagram>
 
-The whole fleet was migrated off Windows Task Scheduler (2026-05-28) onto GitHub Actions, fired by Google Apps Script time-driven triggers — the on-prem box was a single point of failure no one could see fail. A single `asyncpg` pool (min=4 / max=20) runs on a dedicated background event-loop thread so synchronous extractor code can submit queries via `run_coroutine_threadsafe()`. A `ThreadPoolExecutor` runs extractors in parallel, streaming rows over asyncpg's binary `COPY` protocol into six schemas: `data_raw` (JSONB) → `data_staging` (normalized) → `analytics` (views + materialized views), plus `reference`, `pipeline`, and `agent`. After extraction, a backfill pass resolves derived foreign keys, then materialized views refresh one at a time.
+The whole fleet was migrated off Windows Task Scheduler (2026-05-28) onto GitHub Actions, fired by Google Apps Script time-driven triggers. The on-prem box was a single point of failure no one could see fail. A single `asyncpg` pool (min=4 / max=20) runs on a dedicated background event-loop thread so synchronous extractor code can submit queries via `run_coroutine_threadsafe()`. A `ThreadPoolExecutor` runs extractors in parallel, streaming rows over asyncpg's binary `COPY` protocol into six schemas: `data_raw` (JSONB) → `data_staging` (normalized) → `analytics` (views + materialized views), plus `reference`, `pipeline`, and `agent`. After extraction, a backfill pass resolves derived foreign keys, then materialized views refresh one at a time.
 
 ## The pipelines
 
-Each pipeline has its own source and extraction method; they share the warehouse, the `asyncpg`/COPY machinery, and the GitHub Actions + Apps Script trigger layer — which is why this is one platform, not twelve scripts.
+Each pipeline has its own source and extraction method; they share the warehouse, the `asyncpg`/COPY machinery, and the GitHub Actions + Apps Script trigger layer, which is why this is one platform, not twelve scripts.
 
 | Pipeline | Source | What it does |
 |---|---|---|
@@ -38,13 +38,13 @@ Each pipeline has its own source and extraction method; they share the warehouse
 | targeted asset-tasks | Swift API | Report-driven re-extract of a subset |
 | invoicing / quote | Swift API | Invoicing-form + quote data; email dispatcher |
 
-On completion it also **dispatches** two downstream systems — the date-validator and the gmail-scraper — for ~14 orchestrated pipelines in total.
+On completion it also **dispatches** two downstream systems (the date-validator and the gmail-scraper) for ~14 orchestrated pipelines in total.
 
 ## Key Decisions
 
-- **Per-day API chunking.** The Swift API silently truncates a wide date range at ~1,000 rows — no error, just fewer rows. The timer extractor splits each range into one API call per calendar day, which sidesteps the cap entirely. Cost: more API calls. Benefit: zero silent data loss.
+- **Per-day API chunking.** The Swift API silently truncates a wide date range at ~1,000 rows: no error, just fewer rows. The timer extractor splits each range into one API call per calendar day, which sidesteps the cap entirely. Cost: more API calls. Benefit: zero silent data loss.
 - **asyncpg on a background thread, not in-process.** A large synchronous extractor codebase couldn't be rewritten fully async at once. Running one pool on its own event loop and bridging via `run_coroutine_threadsafe()` lets sync callers stay sync while the DB layer is fully async and thread-safe.
-- **Atomic clear+reload via a data-modifying CTE.** The full-refresh tables used to clear in a separate auto-committed `DELETE`, then `INSERT`. When the big `INSERT` later hit `statement_timeout`, the table was already empty — committed. Folding the clear into the insert as `WITH cleared AS (DELETE ... RETURNING 1) INSERT ...` makes clear-and-reload one statement: a timeout rolls back both, so a table is never left empty.
+- **Atomic clear+reload via a data-modifying CTE.** The full-refresh tables used to clear in a separate auto-committed `DELETE`, then `INSERT`. When the big `INSERT` later hit `statement_timeout`, the table was already empty, and committed. Folding the clear into the insert as `WITH cleared AS (DELETE ... RETURNING 1) INSERT ...` makes clear-and-reload one statement: a timeout rolls back both, so a table is never left empty.
 - **Six-schema split.** `data_raw` holds unmodified API responses; `data_staging` holds transformed rows; `analytics` holds views and MVs; `reference`, `pipeline`, and `agent` hold lookups, run metadata, and assistant metadata. Every layer is rebuildable from the one beneath it.
 - **Write-once derived IDs.** Once a foreign-key resolution lands on a row it never changes, so it survives clear+reload patterns and prevents cascading rewrites downstream.
 
@@ -77,7 +77,7 @@ class PipelineDB:
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 ```
 
-Atomic clear+reload — a `statement_timeout` can no longer empty the table:
+Atomic clear+reload, where a `statement_timeout` can no longer empty the table:
 
 ```python
 # A separate DELETE then INSERT can leave the table EMPTY if the INSERT
@@ -107,16 +107,16 @@ def retry_db(fn, max_retries=5, description="operation"):
 ## Metrics
 
 - **Warehouse scale:** ~12.2M rows across 111 tables in six schemas (`data_raw` 29, `data_staging` 41, `analytics` 12, plus `reference`, `pipeline`, `agent`).
-- **Core dataset:** `stg_asset_tasks` ~2.6M rows, transformed server-side in ~2–3 minutes — down from ~44 minutes when the same logic ran in Python.
+- **Core dataset:** `stg_asset_tasks` ~2.6M rows, transformed server-side in ~2–3 minutes, down from ~44 minutes when the same logic ran in Python.
 - **Biggest tables:** `stg_asset_tasks` (2.6M), `raw_timer_activities` (830k), `raw_daily_reports` (674k), `invoice_audit_clean` (609k).
 - **Schema evolution:** ~100 numbered SQL migrations (001 → 098) across the six schemas.
 
 ## What I Learned
 
-- **Silent truncation bugs hide in the small.** The API never returned an error — it just returned fewer rows than asked. Comparing per-day counts against expectation was the only way to catch it. Validate row counts as a first-class signal, not an afterthought.
+- **Silent truncation bugs hide in the small.** The API never returned an error; it just returned fewer rows than asked. Comparing per-day counts against expectation was the only way to catch it. Validate row counts as a first-class signal, not an afterthought.
 - **Atomicity is a correctness property, not a nicety.** A two-statement clear-then-reload looks fine until the reload times out and you're staring at an empty table in production. Folding the delete into the insert with a data-modifying CTE made the failure mode impossible.
 - **Sync-async bridging is a real pattern, not a hack.** Pure-async rewrites of large sync codebases stall. A pool on a background event loop unlocks async DB access inside sync callers with one helper class.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/local-pipeline) — open-source reference implementation lands W12 of the AI Engineer learning path.
+[GitHub repo](https://github.com/Jamil1016/local-pipeline): open-source reference implementation lands W12 of the AI Engineer learning path.
