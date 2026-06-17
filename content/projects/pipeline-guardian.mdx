@@ -2,7 +2,7 @@
 
 A set of nightly ETL pipelines failed in a small number of recurring ways: stale rows left in a raw table after a crashed run, a run stuck in `running` because the process died before writing status, an orphaned index from a half-finished recreate, transient DNS and upstream-API blips. When one failed, the originating manual incident took roughly 40 minutes to triage and fix by hand, and across the fleet this happened two or three times a week. Some failures were safe to fix mechanically; some needed a judgment call; and some were genuine code or auth bugs that no automation should touch.
 
-I seeded the design from real history — 53 failed runs and 12 stuck runs pulled from the run log — and the shape was clear: most incidents were the same handful of patterns, and the right response depended entirely on *which* pattern. So the system isn't one autonomous fixer. It's a router that sorts each failure into one of three tiers and acts accordingly: fix it silently, ask me first over email, or get out of the way and escalate.
+I seeded the design from real history (53 failed runs and 12 stuck runs pulled from the run log) and the shape was clear: most incidents were the same handful of patterns, and the right response depended entirely on *which* pattern. So the system isn't one autonomous fixer. It's a router that sorts each failure into one of three tiers and acts accordingly: fix it silently, ask me first over email, or get out of the way and escalate.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ graph TD
   ES --> SS
 `}</MermaidDiagram>
 
-Detection is driven by an 18-pattern YAML knowledge base (`known_issues/known_issues.yaml`): 5 `auto`, 6 `approve`, 7 `escalate`, plus 7 pipeline schedules used for missing-run detection. The YAML is the source of truth — a one-way sync (`sync_known_issues.py`) seeds `agent.known_issues` and `agent.pipeline_schedule`. Adding a pattern is a YAML edit plus a sync, with no code redeploy.
+Detection is driven by an 18-pattern YAML knowledge base (`known_issues/known_issues.yaml`): 5 `auto`, 6 `approve`, 7 `escalate`, plus 7 pipeline schedules used for missing-run detection. The YAML is the source of truth. A one-way sync (`sync_known_issues.py`) seeds `agent.known_issues` and `agent.pipeline_schedule`. Adding a pattern is a YAML edit plus a sync, with no code redeploy.
 
 The `periodic` trigger also runs on a cron-style cadence to catch what no failure email reports: runs stuck in `running` past a threshold, scheduled runs that never started (each pipeline has an expected cron plus a grace window), and approvals that have sat unanswered for over 12 hours.
 
@@ -33,13 +33,13 @@ The `periodic` trigger also runs on a cron-style cadence to catch what no failur
 
 - **A three-tier router, not a single autonomous agent.** The severity tier lives in the knowledge base, not in model output. `auto` patterns (e.g. `stale_runs_in_raw_table`, `stuck_running_status`, `index_already_exists`, `dns_blip_at_startup`, `swift_api_503_transient`) run unattended. `approve` patterns email me a proposed action and wait. `escalate` patterns take no action at all. The model never decides its own authority level.
 - **The schema allowlist is the security posture.** Every SQL action passes through `_check_schema_whitelist`: an allowlist of the five schemas the agent owns (`agent, data_raw, data_staging, analytics, pipeline`), an explicit blocklist (`public, auth, storage`, …), and a regex guard that only lets index drops touch `idx_raw_*` names. The agent structurally cannot touch tables it doesn't own.
-- **Intent maps to fixed functions — reply text is never evaluated.** Email approvals are conversational: Claude Haiku classifies a reply into one of four intents, but each intent dispatches to a pre-defined function with typed arguments. Free-text instructions ride along as an opaque payload string; they never widen the action surface. Prompt injection in a reply can't make the agent do something the knowledge base didn't already allow.
+- **Intent maps to fixed functions; reply text is never evaluated.** Email approvals are conversational: Claude Haiku classifies a reply into one of four intents, but each intent dispatches to a pre-defined function with typed arguments. Free-text instructions ride along as an opaque payload string; they never widen the action surface. Prompt injection in a reply can't make the agent do something the knowledge base didn't already allow.
 - **Dry-run is a first-class mode.** `GUARDIAN_DRY_RUN` makes every action log its intent and count affected rows without mutating anything; the manual GHA dispatch defaults to dry-run, and only the Apps Script bridge runs live.
 - **Guardrails against runaway behavior.** A kill-switch row in `agent.monitor_state` halts all action immediately; a rate limiter caps automated re-runs at 3 per pipeline per 24h (and escalates instead once hit); pending approvals get a reminder after 12h.
 
 ## Code Samples
 
-The schema allowlist guard — the whole security model in one function. Any SQL touching a schema the agent doesn't own raises before it can execute:
+The schema allowlist guard is the whole security model in one function. Any SQL touching a schema the agent doesn't own raises before it can execute:
 
 ```python
 _ALLOWED_SCHEMAS = frozenset({
@@ -62,7 +62,7 @@ def _check_schema_whitelist(sql: str) -> None:
             raise PermissionError(f"SQL references unknown schema '{schema_lower}'.")
 ```
 
-Reply classification — Claude sorts a free-text email reply into one of four fixed intents. The output is structured JSON and validated against an allowlist before anything dispatches:
+Reply classification: Claude sorts a free-text email reply into one of four fixed intents. The output is structured JSON and validated against an allowlist before anything dispatches:
 
 ```python
 VALID_INTENTS = {"approve", "decline", "modify", "instruct"}
@@ -82,7 +82,7 @@ def classify_intent(reply_text: str, pending_action: dict) -> dict:
     return parsed  # {"intent", "instructions", "confidence"}
 ```
 
-`handle_reply` then transitions the detection through `approved → executed`, and the intent selects a fixed function (`trigger_gha_workflow`, `clean_stale_runs`, `mark_stuck_failed`, …) — never an arbitrary action derived from the reply.
+`handle_reply` then transitions the detection through `approved → executed`, and the intent selects a fixed function (`trigger_gha_workflow`, `clean_stale_runs`, `mark_stuck_failed`, …), never an arbitrary action derived from the reply.
 
 ## Metrics
 
@@ -99,10 +99,10 @@ Design context (motivation, not outcomes): seeded from 53 historical failed runs
 
 ## What I Learned
 
-- **Tiering by knowledge-base entry beats tiering by model confidence.** Encoding "is this safe to auto-fix" as data — a `severity` field in YAML — keeps the dangerous decision out of the model's hands entirely and makes the policy auditable and editable without a deploy.
+- **Tiering by knowledge-base entry beats tiering by model confidence.** Encoding "is this safe to auto-fix" as data, a `severity` field in YAML, keeps the dangerous decision out of the model's hands entirely and makes the policy auditable and editable without a deploy.
 - **Constrain the LLM to intent classification, not action selection.** Mapping four intents to fixed, typed functions means the conversational layer can be friendly and forgiving while the action surface stays exactly as narrow as the knowledge base defines. The reply text is data, never code.
 - **A boring state machine is the backbone.** Dedupe, rate limiting, reminders, and the kill switch all fall out naturally once every detection is a row with a well-defined set of states. Most of the safety came from the schema, not the model.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/pipeline-guardian) — public.
+[GitHub repo](https://github.com/Jamil1016/pipeline-guardian). Public.

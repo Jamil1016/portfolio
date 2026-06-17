@@ -1,8 +1,8 @@
 ## The Problem
 
-Across a monorepo of side projects, "what's happening right now" lives in places nobody watches: GitHub Actions run statuses, local file edits, the occasional commit. Dashboards exist, but a grid of green/red dots doesn't convey momentum — which project is actively being worked, which one's CI just caught fire, which one's gone stale. I wanted that state to be *ambient and glanceable* instead of something you go look up.
+Across a monorepo of side projects, "what's happening right now" lives in places nobody watches: GitHub Actions run statuses, local file edits, the occasional commit. Dashboards exist, but a grid of green/red dots doesn't convey momentum: which project is actively being worked, which one's CI just caught fire, which one's gone stale. I wanted that state to be *ambient and glanceable* instead of something you go look up.
 
-So agent-town renders the monorepo as a living top-down pixel town. Each project is a building; activity animates the world — a session lights a building up, a CI run sends a caravan, a failure sets it on fire, neglect lets it go stale. The point isn't a game; it's turning dry run-logs into a metaphor you can read in one glance.
+So agent-town renders the monorepo as a living top-down pixel town. Each project is a building; activity animates the world. A session lights a building up, a CI run sends a caravan, a failure sets it on fire, neglect lets it go stale. The point isn't a game; it's turning dry run-logs into a metaphor you can read in one glance.
 
 ## Architecture
 
@@ -20,19 +20,19 @@ graph TD
   CL --> IN[Interior scene<br/>local-pipeline]
 `}</MermaidDiagram>
 
-Adapters emit `RawEvent`s: `pipeline-gha.ts` polls the GitHub Actions API (`run_start` / `run_success` / `run_fail`); `git-watch.ts` watches the filesystem (debounced) and polls `git log` for staleness. The collector (`server.ts`) accepts them on `POST /events`. The translator maps each of 10 event kinds to town actions — `tool_use` → a worker *crafts*, `run_success` → a caravan arrives with a sparkle. `town-state.ts` distinguishes **persistent** state (a building's active/idle/fire/stale status) from **transient** actions (caravans, effects) that broadcast but aren't stored, so a late-joining client sees the town's current mood without replaying history. The Phaser client places buildings per `town.config.ts` and animates state changes.
+Adapters emit `RawEvent`s: `pipeline-gha.ts` polls the GitHub Actions API (`run_start` / `run_success` / `run_fail`); `git-watch.ts` watches the filesystem (debounced) and polls `git log` for staleness. The collector (`server.ts`) accepts them on `POST /events`. The translator maps each of 10 event kinds to town actions: `tool_use` → a worker *crafts*, `run_success` → a caravan arrives with a sparkle. `town-state.ts` distinguishes **persistent** state (a building's active/idle/fire/stale status) from **transient** actions (caravans, effects) that broadcast but aren't stored, so a late-joining client sees the town's current mood without replaying history. The Phaser client places buildings per `town.config.ts` and animates state changes.
 
 ## Key Decisions
 
 - **A metaphor translation layer, not raw events to the renderer.** Events are mapped to a fantasy narrative in `translator.ts` (crafting, caravans, construction, fire) so the town reads as a cohesive world rather than a dashboard skin. The mapping is codified by a 12-case test suite.
 - **Persistent vs. transient state.** Building/worker status persists in `town-state.ts`; caravans and effects are ephemeral. Late joiners get a snapshot of the mood, not a backlog of past events.
-- **Loopback-only + origin-checked.** The collector binds to `127.0.0.1:7373` and origin-checks every POST and WebSocket upgrade — a single-developer local tool, hardened against CSRF rather than exposed as a service.
+- **Loopback-only + origin-checked.** The collector binds to `127.0.0.1:7373` and origin-checks every POST and WebSocket upgrade. It's a single-developer local tool, hardened against CSRF rather than exposed as a service.
 - **Adapters are isolated and crash-safe.** Each adapter wraps its work in try/catch and returns a stop function; if the GitHub poll fails or the file watch hangs, the other keeps running and the collector stays up.
-- **Art is a pluggable manifest.** `assets.ts` lists every sprite, and NPC colors are assigned by hashing the actor ID — so an art pack is swapped by editing one file, not the scenes.
+- **Art is a pluggable manifest.** `assets.ts` lists every sprite, and NPC colors are assigned by hashing the actor ID, so an art pack is swapped by editing one file, not the scenes.
 
 ## Code Samples
 
-The translator — the whole metaphor in one switch. A session start brings a building alive and walks a worker in; a tool use becomes an activity:
+The translator is the whole metaphor in one switch. A session start brings a building alive and walks a worker in; a tool use becomes an activity:
 
 ```typescript
 export function translate(e: RawEvent): TownAction[] {
@@ -46,7 +46,7 @@ export function translate(e: RawEvent): TownAction[] {
       return [{ type: 'worker', project: e.project, actor: e.sessionId, activity: toolActivity(e.tool), ts: e.ts }]
 ```
 
-State snapshots are built on a null-prototype object and defensively cloned — a guard against prototype pollution from event payloads:
+State snapshots are built on a null-prototype object and defensively cloned, a guard against prototype pollution from event payloads:
 
 ```typescript
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
@@ -71,10 +71,10 @@ These are verifiable facts about the system, not measured outcomes:
 
 ## What I Learned
 
-- **A translation layer is what makes data feel like a world.** Keeping the metaphor (events → town actions) separate from both ingestion and rendering meant I could tune the *feel* — what a CI run looks like — without touching adapters or scenes.
+- **A translation layer is what makes data feel like a world.** Keeping the metaphor (events → town actions) separate from both ingestion and rendering meant I could tune the *feel* (what a CI run looks like) without touching adapters or scenes.
 - **Decide what persists and what's ephemeral up front.** The whole late-joiner experience falls out cleanly once "mood" is persistent state and "events" are transient broadcasts; conflating them would have forced an event-replay log nobody needed.
-- **Honest scope:** the mechanics, tests, and defensive collector are complete and working — the visual art (currently a CC0 placeholder pack) is the acknowledged gap before it looks as good as it behaves.
+- **Honest scope:** the mechanics, tests, and defensive collector are complete and working. The visual art (currently a CC0 placeholder pack) is the acknowledged gap before it looks as good as it behaves.
 
 ## Links
 
-[GitHub repo](https://github.com/jamilmendez-ontel/agent-town) — public. A single-developer local tool; adapters are currently wired to two specific repos.
+[GitHub repo](https://github.com/jamilmendez-ontel/agent-town), public. A single-developer local tool; adapters are currently wired to two specific repos.

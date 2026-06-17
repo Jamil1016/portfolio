@@ -1,6 +1,6 @@
 ## The Problem
 
-An org's requirement files — mostly RFDS PDFs — lived behind the Swift Projects REST API, scattered across a deep hierarchy: project → asset → task → asset-task → requirement → file. Pulling them by hand meant clicking through that tree project by project. For a single org that's tens of thousands of asset-tasks to walk and thousands of PDFs to download.
+An org's requirement files, mostly RFDS PDFs, lived behind the Swift Projects REST API, scattered across a deep hierarchy: project → asset → task → asset-task → requirement → file. Pulling them by hand meant clicking through that tree project by project. For a single org that's tens of thousands of asset-tasks to walk and thousands of PDFs to download.
 
 The job also ran over a residential internet connection for hours at a stretch. Any tool that couldn't survive a mid-run outage and pick up exactly where it left off would force a full restart every time the wifi blinked. So the real constraints were two: walk the API hierarchy fast enough to finish in a sitting, and make a multi-hour, network-fragile run safely resumable.
 
@@ -17,18 +17,18 @@ graph LR
   O --> X[(_failures.xlsx)]
 `}</MermaidDiagram>
 
-The orchestrator reads an org's project list from a read-only Postgres table (`stg_projects`), smallest project first so a quick one validates the run before the big ones tie up time. Each project runs through two thread pools. The scan pool (32 workers) lists asset-tasks, then their requirements, then the files behind each name-matched, submitted/approved requirement. The download pool (16 workers) drains the resulting queue, resolves each file's presigned S3 URL, and streams the bytes to disk. Both stages are IO-bound — waiting on network, not CPU — so threads, not processes. Output is a flat layout, `<asset_id>__<filename>.pdf`, and the asset_id makes filenames collision-free across the org.
+The orchestrator reads an org's project list from a read-only Postgres table (`stg_projects`), smallest project first so a quick one validates the run before the big ones tie up time. Each project runs through two thread pools. The scan pool (32 workers) lists asset-tasks, then their requirements, then the files behind each name-matched, submitted/approved requirement. The download pool (16 workers) drains the resulting queue, resolves each file's presigned S3 URL, and streams the bytes to disk. Both stages are IO-bound, waiting on network, not CPU, so threads, not processes. Output is a flat layout, `<asset_id>__<filename>.pdf`, and the asset_id makes filenames collision-free across the org.
 
 ## Key Decisions
 
 - **Two thread pools, both IO-bound.** Scanning the hierarchy and streaming bytes are different shapes of waiting-on-the-network. A wide scan pool (32) keeps discovery saturated; a narrower download pool (16) streams files without overwhelming the connection. Neither stage is CPU-bound, so a process pool would only have added serialization overhead.
 - **Resumable checkpointing keyed on real completion.** The orchestrator writes `_progress.json` after every project, and `is_done()` treats only `ok` and `no_atks` as truly complete. `discovery_failed`, `crashed`, and `orchestrator_crash` are all left to retry on the next `--resume`. A four-hour run that loses internet halfway just gets re-invoked with the same command.
-- **Presigned S3 URLs are fetched without the Bearer header.** The Swift file-metadata endpoint returns a presigned S3 URL that already carries auth in its query string. Sending the API's `Authorization` header along to S3 breaks the signature — so downloads go through a plain `requests.get()`, deliberately bypassing the authed client.
+- **Presigned S3 URLs are fetched without the Bearer header.** The Swift file-metadata endpoint returns a presigned S3 URL that already carries auth in its query string. Sending the API's `Authorization` header along to S3 breaks the signature, so downloads go through a plain `requests.get()`, deliberately bypassing the authed client.
 - **One shared session, hardened against transient failure.** A single `requests.Session` with an `HTTPAdapter` pool of 50 lets all workers reuse TCP/TLS connections. Five-retry exponential backoff covers 502/503/504; a 401 after a long run triggers an automatic re-auth and one retry.
 
 ## Code Samples
 
-The two IO-bound pools — scan fans out, downloads drain a queue:
+The two IO-bound pools: scan fans out, downloads drain a queue:
 
 ```python
 self.scan_pool = ThreadPoolExecutor(max_workers=scan_workers,  # default 32
@@ -51,7 +51,7 @@ with dest.open("wb") as f:
             f.write(chunk)
 ```
 
-Resume safety — only genuine completion counts as done:
+Resume safety, where only genuine completion counts as done:
 
 ```python
 # Anything else (discovery_failed, crashed, orchestrator_crash, ...) is
@@ -78,15 +78,15 @@ python run_org.py --org-did=-LSLnbjcxlr7_LrWCzeH --out RFDS_TSC --resume
 From the first full org run (TSC Construction, 2026-04-28):
 
 - **83 projects scanned in 61.2 minutes**, at roughly **38 asset-tasks per second** through the scan pool.
-- **An internet outage hit the last ~25 minutes**, leaving 15 projects in `discovery_failed`. A `--resume` re-run retried exactly those 15 — resume safety meant the 64 already-`ok` projects were never re-fetched.
+- **An internet outage hit the last ~25 minutes**, leaving 15 projects in `discovery_failed`. A `--resume` re-run retried exactly those 15. Resume safety meant the 64 already-`ok` projects were never re-fetched.
 - **Final result: 64 ok / 4 no_atks / 15 failed**, producing **2,866 PDFs totaling 3.4 GB** on disk in flat `<asset_id>__<filename>.pdf` layout.
 
 ## What I Learned
 
-- **Resumable checkpointing is what makes long, network-fragile runs survivable.** The single design choice that mattered most wasn't concurrency — it was that only true completion counts as done. Everything else retries. A real outage mid-run cost a re-invocation, not an hour.
-- **Presigned URLs are their own auth domain.** The most non-obvious bug was sending the API Bearer token to S3 and getting signature failures. Once you see that the presigned query string *is* the credential, dropping the header is obvious — but it costs an hour the first time.
+- **Resumable checkpointing is what makes long, network-fragile runs survivable.** The single design choice that mattered most wasn't concurrency. It was that only true completion counts as done. Everything else retries. A real outage mid-run cost a re-invocation, not an hour.
+- **Presigned URLs are their own auth domain.** The most non-obvious bug was sending the API Bearer token to S3 and getting signature failures. Once you see that the presigned query string *is* the credential, dropping the header is obvious, but it costs an hour the first time.
 - **Match the pool to the bottleneck, not the instinct.** "Make it parallel" tempts you toward processes. Both stages here were waiting on the network, so threads were correct and processes would only have added cost. Knowing the workload shape before picking the pool is the whole game.
 
 ## Links
 
-GitHub repo — the project moved to the work org and is now private. Open-source reference write-up is coming, slated for W7 of the AI Engineer learning path.
+GitHub repo: the project moved to the work org and is now private. Open-source reference write-up is coming, slated for W7 of the AI Engineer learning path.

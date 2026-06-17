@@ -2,7 +2,7 @@
 
 A business team needed recurring finance and compliance reports delivered automatically, visually rich (real charts, not just tables), gated to the right days, and reliable enough to run for months without a human babysitting them. A missed report meant a manual scramble to reconstruct numbers.
 
-It grew into a four-report suite in one monorepo: a **daily finance report** (built every weekday but emailed only Mon/Wed/Fri), a **weekly compliance audit** (Fridays), an **open-items report** (event-driven, split per carrier with Excel + PDF delivered to per-carrier Google Drive folders), and a **final-cop-pending** prototype. Reliability was the constraint — so each report is triggered by something more dependable than a bare cron timer, and re-running one produces an identical artifact.
+It grew into a four-report suite in one monorepo: a **daily finance report** (built every weekday but emailed only Mon/Wed/Fri), a **weekly compliance audit** (Fridays), an **open-items report** (event-driven, split per carrier with Excel + PDF delivered to per-carrier Google Drive folders), and a **final-cop-pending** prototype. Reliability was the constraint. Each report is triggered by something more dependable than a bare cron timer, and re-running one produces an identical artifact.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ graph LR
   PDF --> DR[Google Drive<br/>per-carrier folders<br/>open-items only]
 `}</MermaidDiagram>
 
-A Google Apps Script time-trigger fires and posts a `repository_dispatch` to GitHub (the open-items report is instead chained off the upstream `local-pipeline` data refresh, so its email never goes out with stale data). The receiving workflow applies a weekend check and, for daily finance, a Mon/Wed/Fri day-of-week gate — both evaluated in Eastern time so they behave the same whether the trigger fired the workflow or someone ran it manually. On a sending day the Python generator queries read-only Supabase analytics views (asyncpg + psycopg2), renders Chart.js 4.4 charts inside an HTML page that Playwright headless Chromium prints to PDF, and ships via the Gmail API. Open-items additionally writes per-carrier Excel + PDF to dated Drive sub-folders and shares the folder links in the email body.
+A Google Apps Script time-trigger fires and posts a `repository_dispatch` to GitHub (the open-items report is instead chained off the upstream `local-pipeline` data refresh, so its email never goes out with stale data). The receiving workflow applies a weekend check and, for daily finance, a Mon/Wed/Fri day-of-week gate, both evaluated in Eastern time so they behave the same whether the trigger fired the workflow or someone ran it manually. On a sending day the Python generator queries read-only Supabase analytics views (asyncpg + psycopg2), renders Chart.js 4.4 charts inside an HTML page that Playwright headless Chromium prints to PDF, and ships via the Gmail API. Open-items additionally writes per-carrier Excel + PDF to dated Drive sub-folders and shares the folder links in the email body.
 
 ## The reports
 
@@ -30,14 +30,14 @@ The reports share the trigger → render → deliver stack but differ in cadence
 | Daily finance | Apps Script time-trigger | Built weekdays; emailed Mon/Wed/Fri | HTML + PDF via Gmail |
 | Weekly compliance audit | Apps Script time-trigger | Fridays | PDF via Gmail |
 | Open-items | Upstream pipeline completion (event-driven) | Per data refresh | Per-carrier (VZW/ATT/TMO) Excel + PDF to Google Drive folders |
-| Final-COP-pending | — | prototype | — |
+| Final-COP-pending | n/a | prototype | n/a |
 
 ## Key Decisions
 
-- **Apps Script / event-driven triggers over GitHub Actions cron.** GHA cron drifts and silently skips. Apps Script time-triggers fire reliably, and the open-items report goes one better — it's dispatched by the upstream data pipeline's end-of-run, so the report can't beat its own data.
+- **Apps Script / event-driven triggers over GitHub Actions cron.** GHA cron drifts and silently skips. Apps Script time-triggers fire reliably, and the open-items report goes one better: it's dispatched by the upstream data pipeline's end-of-run, so the report can't beat its own data.
 - **Day-of-week gate at the workflow, not the trigger.** The Mon/Wed/Fri (`{0, 2, 4}`) gate and weekend check run inside the job, in Eastern time, so a manual `workflow_dispatch` respects the same rules as the scheduled trigger. One source of truth.
 - **Chart.js rendered to PDF via Playwright, not matplotlib.** Bundling Chart.js locally and printing the page with headless Chromium gives crisp, web-quality charts in the PDF and reuses the exact same rendering the HTML email uses. Base64 is used only to embed the logo.
-- **Gmail API, not SMTP.** A shared OAuth token (`build_gmail_service()` / `send_email()`) sends from the notifier account — no SMTP credentials to rotate, and the same token builds the Drive service for open-items uploads.
+- **Gmail API, not SMTP.** A shared OAuth token (`build_gmail_service()` / `send_email()`) sends from the notifier account. There are no SMTP credentials to rotate, and the same token builds the Drive service for open-items uploads.
 - **Freshness guard + retries.** Reports refuse to email a stale snapshot, and `_connect_with_retry` rides out transient pooler hiccups with exponential backoff.
 
 ## Code Samples
@@ -60,7 +60,7 @@ elif _now_et.weekday() not in _EMAIL_ALLOWED_DOW:
     return
 ```
 
-Gmail API send — a shared OAuth token, no SMTP:
+Gmail API send with a shared OAuth token, no SMTP:
 
 ```python
 def build_gmail_service(credentials_dir: Path):
@@ -91,17 +91,17 @@ def _connect_with_retry(url, attempts=3, backoff=2.0):
 
 ## Metrics
 
-- **Delivery latency:** ~5–15 minutes trigger-to-inbox (dominated by Apps Script poll interval + GHA cold start + Playwright Chromium on a cache miss).
+- **Delivery latency:** ~5–15 minutes trigger-to-inbox, dominated by Apps Script poll interval + GHA cold start + Playwright Chromium on a cache miss.
 - **Daily finance run:** ~4 minutes end to end.
 - **Suite:** 4 subprojects; open-items split across 3 carriers (VZW / ATT / TMO) into per-carrier Drive folders.
 - **Tests:** ~12 unit tests plus golden snapshots (smoke + freshness-guard boundaries, email body, subject lines).
 
 ## What I Learned
 
-- **Treat GHA cron as best-effort, not reliable.** Anything that has to fire on time gets a real trigger source — an Apps Script time-trigger, or, better, the upstream data pipeline's completion event so the report can't run ahead of its data.
+- **Treat GHA cron as best-effort, not reliable.** Anything that has to fire on time gets a real trigger source: an Apps Script time-trigger, or, better, the upstream data pipeline's completion event so the report can't run ahead of its data.
 - **Gate at the workflow, never per entry point.** The weekend + DOW logic runs once inside the job, in Eastern time, so scheduled runs, manual dispatches, and any future webhook all obey the same rules with zero duplication.
-- **Render charts the way the web does.** Bundling Chart.js and printing with Playwright Chromium gave better-looking PDFs than a separate static-chart library and kept email and PDF visually identical — months of monitored operation with clean recovery on transient failures.
+- **Render charts the way the web does.** Bundling Chart.js and printing with Playwright Chromium gave better-looking PDFs than a separate static-chart library and kept email and PDF visually identical, with months of monitored operation and clean recovery on transient failures.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/report-automation) — open-source reference implementation lands W5 of the AI Engineer learning path.
+[GitHub repo](https://github.com/Jamil1016/report-automation). Open-source reference implementation lands W5 of the AI Engineer learning path.

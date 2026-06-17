@@ -38,7 +38,7 @@ export async function Training() {
           <div className="tr-left">
             <p className="tr-lead">
               I keep a structured roadmap and track every course, paper, and build
-              exercise against it — and I only count a thing as learned once it ships
+              exercise against it, and I only count a thing as learned once it ships
               into a system.
             </p>
 
@@ -107,7 +107,7 @@ export async function Training() {
                 </>
               ) : (
                 <>
-                  <h3>Between weeks — planning the next push.</h3>
+                  <h3>Between weeks. Planning the next push.</h3>
                   <div className="focus">
                     The current course shows here when one is in progress.
                   </div>
@@ -133,7 +133,7 @@ export async function Training() {
                       <i
                         key={w.sort_order}
                         className={lvl ? `sl-c lvl${lvl}` : "sl-c"}
-                        title={`${w.course_title} — ${statusMeta(w.status)}`}
+                        title={`${w.course_title}: ${statusMeta(w.status)}`}
                       />
                     );
                   })}

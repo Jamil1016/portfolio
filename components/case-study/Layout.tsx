@@ -48,7 +48,7 @@ export function CaseStudyLayout({
 
       <footer>
         <div className="wrap foot">
-          <span>© 2026 Jamil Mendez · jamilmendez.dev</span>
+          <span>© 2026 Jamil Mendez</span>
           <span>
             <a href="/#work">Work</a>
             <a href="/projects">All projects</a>

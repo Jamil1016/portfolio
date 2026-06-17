@@ -37,7 +37,7 @@ export const projects: ProjectMeta[] = [
   },
   {
     slug: "data-analyst-reporting-agent",
-    name: "DARA — Data Analyst Reporting Agent",
+    name: "DARA: Data Analyst Reporting Agent",
     tagline: "Chat-first NL→SQL analytics with Postgres RLS and a defined-metric library",
     stack: ["Next.js", "TypeScript", "Supabase", "Claude API", "Postgres"],
     publicRepoUrl: "https://github.com/Jamil1016/data-analyst-reporting-agent",
@@ -70,7 +70,7 @@ export const projects: ProjectMeta[] = [
   {
     slug: "report-automation",
     name: "Report Automation",
-    tagline: "Scheduled multi-report suite — finance, compliance & open-items via Gmail + Drive",
+    tagline: "Scheduled multi-report suite: finance, compliance & open-items via Gmail + Drive",
     stack: ["Python", "Supabase", "Playwright", "Gmail API", "Google Drive", "GitHub Actions"],
     publicRepoUrl: "https://github.com/Jamil1016/report-automation",
     prod: "production",
@@ -100,7 +100,7 @@ export const projects: ProjectMeta[] = [
   {
     slug: "daily-claude-digest",
     name: "Daily Claude Digest",
-    tagline: "Scheduled AI digest pipeline — Claude + Gmail OAuth compile a daily briefing",
+    tagline: "Scheduled AI digest pipeline: Claude + Gmail OAuth compile a daily briefing",
     stack: ["Python", "Claude API", "Gmail API", "Google Calendar API"],
     publicRepoUrl: "https://github.com/Jamil1016/daily-claude-digest",
     prod: "production",
@@ -121,7 +121,7 @@ export const projects: ProjectMeta[] = [
   {
     slug: "quote-automation",
     name: "Quote Automation",
-    tagline: "Internal quoting tool — review queue, batch PDF-to-Drive & Gmail-draft emailing, with live presence",
+    tagline: "Internal quoting tool with a review queue, batch PDF-to-Drive & Gmail-draft emailing, and live presence",
     stack: ["Next.js", "React", "TypeScript", "Supabase", "Playwright"],
     publicRepoUrl: "https://github.com/Jamil1016/quote-automation",
     prod: "production",
@@ -142,7 +142,7 @@ export const projects: ProjectMeta[] = [
   {
     slug: "portal",
     name: "Ops Portal",
-    tagline: "Internal ops portal UI — unified data-health, dashboards & embedded analyst (foundation phase)",
+    tagline: "Internal ops portal UI: unified data-health, dashboards & embedded analyst (foundation phase)",
     stack: ["Next.js", "React", "TypeScript", "Supabase", "Framer Motion"],
     publicRepoUrl: "https://github.com/Jamil1016/portal",
     prod: "prototype",

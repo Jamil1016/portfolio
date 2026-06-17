@@ -1,8 +1,8 @@
 ## The Problem
 
-A team was using Gmail as a structured-data channel. Close-out package status reports landed in the inbox as HTML emails — five distinct package types (landlord close-outs, standard close-outs, 48-hour reviews, package reviews, live reviews), each with its own field set, all evolving over time. Those fields needed to flow into the warehouse and onto dashboards without anyone copy-pasting.
+A team was using Gmail as a structured-data channel. Close-out package status reports landed in the inbox as HTML emails. There were five distinct package types (landlord close-outs, standard close-outs, 48-hour reviews, package reviews, live reviews), each with its own field set, all evolving over time. Those fields needed to flow into the warehouse and onto dashboards without anyone copy-pasting.
 
-The trap: every parser written against email is one template change away from breaking. The HTML wasn't clean either — the sender embedded zero-size tracking spans that fractured words mid-token when extracted. The solution had to absorb format drift without code changes for new fields, and survive HTML that actively fought the parser.
+The trap: every parser written against email is one template change away from breaking. The HTML wasn't clean either. The sender embedded zero-size tracking spans that fractured words mid-token when extracted. The solution had to absorb format drift without code changes for new fields, and survive HTML that actively fought the parser.
 
 ## Architecture
 
@@ -18,20 +18,20 @@ graph LR
   D -.->|rolling append| S[Google Sheet]
 `}</MermaidDiagram>
 
-Scraping and parsing are two separable stages writing to two tables. The scraper does incremental fetch — it reads `MAX(received_at)` from the warehouse and appends an `after:` filter to the Gmail query, so only newer mail gets pulled. Raw headers plus the full HTML body land in `data_raw.raw_emails` and `data_staging.stg_emails`.
+Scraping and parsing are two separable stages writing to two tables. The scraper does incremental fetch: it reads `MAX(received_at)` from the warehouse and appends an `after:` filter to the Gmail query, so only newer mail gets pulled. Raw headers plus the full HTML body land in `data_raw.raw_emails` and `data_staging.stg_emails`.
 
 The parser reads those bodies separately. It strips hidden tracking spans, finds the package header, walks the containing table extracting every label:value pair into a JSONB `fields` column, and writes `data_staging.stg_package_emails`. Because parsing is decoupled from scraping, a parser improvement can be re-applied to the entire history without re-fetching a single email from Gmail.
 
 ## Key Decisions
 
-- **JSONB over fixed columns.** Five package types with overlapping-but-different fields, and the templates change. JSONB absorbs new fields without migrations — the Sheets export carries the known columns and rolls any unrecognized keys into a single `Other Fields (JSON)` column, so a new field never breaks the export.
+- **JSONB over fixed columns.** Five package types with overlapping-but-different fields, and the templates change. JSONB absorbs new fields without migrations. The Sheets export carries the known columns and rolls any unrecognized keys into a single `Other Fields (JSON)` column, so a new field never breaks the export.
 - **Ordered header classification.** `LANDLORD CLOSE OUT PACKAGE` contains `CLOSE OUT PACKAGE` as a substring. The patterns are checked longest-first, so a landlord email is never misclassified as a generic close-out.
-- **Hidden-span stripping with artifact repair.** The sender hides hash IDs inside `font-size:0/0pt/1pt` spans. Decomposing them is step one; step two repairs the damage left behind — `get_text(" ")` had split `Construction` into `C onstruction` and a hidden-span hash had eaten the `LA` off `LANDLORD`, leaving `NDLORD`. Both are repaired with targeted regex.
-- **Re-parse without re-fetch.** The parser upserts with `ON CONFLICT (message_id) DO UPDATE`, refreshing `fields` and stamping `parsed_at = NOW()` — *not* `DO NOTHING`. Improving the parser and re-running re-applies to every stored email without touching the Gmail API. The scrape stage stays `DO NOTHING`; the parse stage is the one that re-derives.
+- **Hidden-span stripping with artifact repair.** The sender hides hash IDs inside `font-size:0/0pt/1pt` spans. Decomposing them is step one; step two repairs the damage left behind. `get_text(" ")` had split `Construction` into `C onstruction` and a hidden-span hash had eaten the `LA` off `LANDLORD`, leaving `NDLORD`. Both are repaired with targeted regex.
+- **Re-parse without re-fetch.** The parser upserts with `ON CONFLICT (message_id) DO UPDATE`, refreshing `fields` and stamping `parsed_at = NOW()`, *not* `DO NOTHING`. Improving the parser and re-running re-applies to every stored email without touching the Gmail API. The scrape stage stays `DO NOTHING`; the parse stage is the one that re-derives.
 
 ## Code Samples
 
-Ordered header patterns — longest prefix first so landlord packages never collapse into the generic bucket:
+Ordered header patterns, longest prefix first so landlord packages never collapse into the generic bucket:
 
 ```python
 # Header patterns to detect structured package tables (checked in order)
@@ -61,7 +61,7 @@ if t.startswith('NDLORD CLOSE OUT PACKAGE'):
 label = re.sub(r'\b([A-Z]) ([a-z])', r'\1\2', label)
 ```
 
-Re-parseable upsert — improvements re-apply to stored mail without re-scraping:
+Re-parseable upsert, so improvements re-apply to stored mail without re-scraping:
 
 ```sql
 INSERT INTO data_staging.stg_package_emails
@@ -78,11 +78,11 @@ ON CONFLICT (message_id) DO UPDATE SET
 
 ## Metrics
 
-- **Five package header types** classified in priority order into a single JSONB `fields` column — no schema change when a new field appears.
+- **Five package header types** classified in priority order into a single JSONB `fields` column, with no schema change when a new field appears.
 - **Incremental fetch** keyed on `MAX(received_at)`; fetch ceiling raised from 2,000 to 10,000 results per run.
-- **Continuous scheduling** — moved off a single nightly GitHub Action (04:00 UTC) to an Apps Script trigger firing roughly every five minutes during business hours, with optional rolling Google Sheet output.
+- **Continuous scheduling.** Moved off a single nightly GitHub Action (04:00 UTC) to an Apps Script trigger firing roughly every five minutes during business hours, with optional rolling Google Sheet output.
 - **Re-parse cost is decoupled from Gmail.** Parser fixes re-apply across the full stored corpus without re-fetching.
-- **Known parser gap (pinned 2026-06-02):** `cop_revision` emails frequently drop dates — 3,834 rows over a 60-day window carried a null `cop_complete`. The gap is upstream of the date-validator and tracked openly rather than papered over.
+- **Known parser gap (pinned 2026-06-02):** `cop_revision` emails frequently drop dates. 3,834 rows over a 60-day window carried a null `cop_complete`. The gap is upstream of the date-validator and tracked openly rather than papered over.
 
 ## What I Learned
 
@@ -92,4 +92,4 @@ ON CONFLICT (message_id) DO UPDATE SET
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/gmail-scraper) — open-source reference implementation lands W3 of the AI Engineer learning path.
+[GitHub repo](https://github.com/Jamil1016/gmail-scraper). Open-source reference implementation lands W3 of the AI Engineer learning path.

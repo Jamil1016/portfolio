@@ -1,12 +1,12 @@
 ## The Problem
 
-RFDS (Radio Frequency Data Sheet) PDFs arrive in a Gmail inbox from multiple telecom carriers — AT&T, Verizon, T-Mobile, and others — each carrying ~30 structured fields per site (WOID, site ID, GPS, finance region, structure type, …). The existing process was a person opening each attachment and copy-pasting fields into a spreadsheet, every month, across hundreds of documents. It's slow, error-prone, and the layouts differ by carrier.
+RFDS (Radio Frequency Data Sheet) PDFs arrive in a Gmail inbox from multiple telecom carriers (AT&T, Verizon, T-Mobile, and others), each carrying ~30 structured fields per site (WOID, site ID, GPS, finance region, structure type, …). The existing process was a person opening each attachment and copy-pasting fields into a spreadsheet, every month, across hundreds of documents. It's slow, error-prone, and the layouts differ by carrier.
 
 The tool automates the whole loop: pull RFDS attachments from Gmail, detect which carrier template a PDF is, parse it deterministically, and write monthly per-carrier Excel workbooks an operator can hand straight to reporting. Crucially, it ships as one Windows `.exe` so a non-technical operator runs it with no Python install.
 
 ## Architecture
 
-Gmail I/O and PDF parsing have opposite bottlenecks — one is network-bound, the other CPU-bound — so they run on different pools. Deterministic parsing is the default path; Claude is a gated fallback only for AT&T PDFs the parser can't read.
+Gmail I/O and PDF parsing have opposite bottlenecks. One is network-bound, the other CPU-bound, so they run on different pools. Deterministic parsing is the default path; Claude is a gated fallback only for AT&T PDFs the parser can't read.
 
 <MermaidDiagram>{`
 graph TD
@@ -20,19 +20,19 @@ graph TD
   EW --> XL[Monthly workbooks<br/>per-carrier sheets + JSONL]
 `}</MermaidDiagram>
 
-`gmail_client.py` searches and downloads attachments over an OAuth'd Gmail service; a `ThreadPoolExecutor` keeps that network I/O from serializing. Each PDF's bytes go to a `ProcessPoolExecutor`, where `pdf_parser.detect_template()` matches carrier signature strings (a Verizon footer, a T-Mobile URL, a VNOC title, an AT&T "RFDSDetails" + WOID token) and routes to one of five per-carrier parsers backed by pdfplumber table extraction. If — and only if — an AT&T parse is marked `failed` *and* `ANTHROPIC_API_KEY` is set, it falls back to a Claude (`claude-haiku-4-5-20251001`) pass. Rows are appended via an `IncrementalWriter` that saves the workbook after every row (and mirrors to JSONL), grouped into monthly files with one worksheet per carrier.
+`gmail_client.py` searches and downloads attachments over an OAuth'd Gmail service; a `ThreadPoolExecutor` keeps that network I/O from serializing. Each PDF's bytes go to a `ProcessPoolExecutor`, where `pdf_parser.detect_template()` matches carrier signature strings (a Verizon footer, a T-Mobile URL, a VNOC title, an AT&T "RFDSDetails" + WOID token) and routes to one of five per-carrier parsers backed by pdfplumber table extraction. If, and only if, an AT&T parse is marked `failed` *and* `ANTHROPIC_API_KEY` is set, it falls back to a Claude (`claude-haiku-4-5-20251001`) pass. Rows are appended via an `IncrementalWriter` that saves the workbook after every row (and mirrors to JSONL), grouped into monthly files with one worksheet per carrier.
 
 ## Key Decisions
 
-- **Deterministic first, Claude only on failure.** pdfplumber + signature matching parses standard templates in milliseconds with zero API cost and full auditability. The Claude fallback is opt-in (`ANTHROPIC_API_KEY`) and fires only for unrecognized AT&T layouts — the model is a safety net, not the engine.
+- **Deterministic first, Claude only on failure.** pdfplumber + signature matching parses standard templates in milliseconds with zero API cost and full auditability. The Claude fallback is opt-in (`ANTHROPIC_API_KEY`) and fires only for unrecognized AT&T layouts; the model is a safety net, not the engine.
 - **Two pools for two bottlenecks.** Gmail fetching is network-bound (threads); PDF parsing is CPU-bound and GIL-blocking (processes). Splitting them keeps the I/O threads unblocked while parses run in parallel.
-- **Incremental, crash-safe output.** `IncrementalWriter.add_row()` saves after every append, so a run that dies at row 501 still leaves 500 rows on disk — no need to re-pull from Gmail.
-- **Month × carrier worksheet grouping.** Email receive dates are converted to Eastern Time and bucketed into monthly workbooks (`2026-03.xlsx`), each with per-carrier tabs — matching how the ops team actually files reports.
+- **Incremental, crash-safe output.** `IncrementalWriter.add_row()` saves after every append, so a run that dies at row 501 still leaves 500 rows on disk, with no need to re-pull from Gmail.
+- **Month × carrier worksheet grouping.** Email receive dates are converted to Eastern Time and bucketed into monthly workbooks (`2026-03.xlsx`), each with per-carrier tabs, matching how the ops team actually files reports.
 - **Single-file `.exe` with bundled OAuth client.** PyInstaller `--onefile` ships the tool with no Python dependency; the (non-secret) OAuth client ID is bundled while each user's token caches locally under `%USERPROFILE%\.rfds-extractor\`.
 
 ## Code Samples
 
-Template detection — signature strings route each PDF to the right carrier parser, with `unknown` as the explicit fallthrough:
+Template detection works by signature strings that route each PDF to the right carrier parser, with `unknown` as the explicit fallthrough:
 
 ```python
 def detect_template(pdf_bytes: bytes) -> str:
@@ -51,7 +51,7 @@ def detect_template(pdf_bytes: bytes) -> str:
     return "unknown"
 ```
 
-The fallback is gated by three conditions — wrong carrier, a successful parse, or a missing key all skip Claude entirely:
+The fallback is gated by three conditions: wrong carrier, a successful parse, or a missing key all skip Claude entirely.
 
 ```python
 if (
@@ -75,7 +75,7 @@ These are verifiable facts about the system, not curated outcomes:
 
 ## What I Learned
 
-- **Reach for the LLM last, not first.** Deterministic parsing handles the overwhelming majority of real PDFs faster, cheaper, and more auditably than a model — Claude earns its place precisely because it's the rare-case fallback, not the default.
+- **Reach for the LLM last, not first.** Deterministic parsing handles the overwhelming majority of real PDFs faster, cheaper, and more auditably than a model. Claude earns its place precisely because it's the rare-case fallback, not the default.
 - **Match the concurrency primitive to the bottleneck.** Threads for Gmail, processes for parsing: conflating them (one pool for both) would have either starved I/O or wasted the GIL. The split was the difference between a 20-minute run and a stalled one.
 - **Save-as-you-go is cheap insurance.** Per-row workbook saves cost almost nothing and turned "the run crashed, start over" into "the run crashed, resume from where it stopped."
 

@@ -1,12 +1,12 @@
 ## The Problem
 
-Ontel's internal tooling is spread across separate surfaces — ETL health lives in one place, the data explorer in another, reports somewhere else, and DARA (the chat analyst) in its own app. There's no single front door. The goal of portal is one signed-in operations surface that unifies data health, dashboards, reports, and the embedded analyst, built so customer-facing multi-tenancy can be layered on later without a re-platform.
+Ontel's internal tooling is spread across separate surfaces. ETL health lives in one place, the data explorer in another, reports somewhere else, and DARA (the chat analyst) in its own app. There's no single front door. The goal of portal is one signed-in operations surface that unifies data health, dashboards, reports, and the embedded analyst, built so customer-facing multi-tenancy can be layered on later without a re-platform.
 
-This entry is deliberately honest about where the project is: **portal is the UI foundation** for that surface — a complete, polished dashboard shell with a designed data model — not yet wired to live data. The backend (auth, RLS, real queries) is specified and is the next phase, not a claim I'll make before it's built.
+This entry is deliberately honest about where the project is: **portal is the UI foundation** for that surface, a complete, polished dashboard shell with a designed data model, not yet wired to live data. The backend (auth, RLS, real queries) is specified and is the next phase, not a claim I'll make before it's built.
 
 ## Architecture
 
-The implemented system is a Next.js App Router front end: typed mock data flows into composed dashboard components with animated reveals and a dark/light theme system. The data layer is designed as a clean swap — components take typed props today, Supabase queries tomorrow.
+The implemented system is a Next.js App Router front end: typed mock data flows into composed dashboard components with animated reveals and a dark/light theme system. The data layer is designed as a clean swap: components take typed props today, Supabase queries tomorrow.
 
 <MermaidDiagram>{`
 graph TD
@@ -24,18 +24,18 @@ graph TD
   SH -.swap mock for queries.-> RLS
 `}</MermaidDiagram>
 
-What's real: a Next.js 16 / React 19 dashboard built around a `ThemeProvider` (dark/light with `localStorage` persistence and an SSR hydration guard) and a `SidebarProvider`. Six components — `QuickStats`, `DataHealthPanel`, `PipelineActivity`, `RecentExports`, plus layout — render from six typed mock arrays in `mock-data.ts` with staggered Framer Motion reveals. The interfaces (`DataSource`, `PipelineRun`, `QuickStat`, `RecentExport`) are the contract the real Supabase queries will satisfy, so the swap doesn't touch the UI. What's planned: Google OAuth and Supabase Row-Level Security as the trust boundary at the database, reusing the OAuth wiring from DARA.
+What's real: a Next.js 16 / React 19 dashboard built around a `ThemeProvider` (dark/light with `localStorage` persistence and an SSR hydration guard) and a `SidebarProvider`. Six components (`QuickStats`, `DataHealthPanel`, `PipelineActivity`, `RecentExports`, plus layout) render from six typed mock arrays in `mock-data.ts` with staggered Framer Motion reveals. The interfaces (`DataSource`, `PipelineRun`, `QuickStat`, `RecentExport`) are the contract the real Supabase queries will satisfy, so the swap doesn't touch the UI. What's planned: Google OAuth and Supabase Row-Level Security as the trust boundary at the database, reusing the OAuth wiring from DARA.
 
 ## Key Decisions
 
-- **UI-first, with the data contract designed up front.** Rather than a half-wired backend, the foundation is a complete UI against typed mock data — so the eventual Supabase swap is a data-source change, not a refactor. `mock-data.ts` carries the exact interfaces the queries must return.
-- **Authorization belongs at the database (planned).** The design puts the trust boundary in Supabase RLS, not app-layer checks — a schema allowlist (`analytics.*`, `data_staging.*`, `reference.*`) and tenant isolation enforced in Postgres. This is documented and intended, not yet implemented.
-- **Dark-first theming via CSS custom properties.** A near-black palette with a mint accent and 30+ design tokens, dual light/dark sets, and 0.4s transitions — global theme edits happen in variables, not components.
+- **UI-first, with the data contract designed up front.** Rather than a half-wired backend, the foundation is a complete UI against typed mock data, so the eventual Supabase swap is a data-source change, not a refactor. `mock-data.ts` carries the exact interfaces the queries must return.
+- **Authorization belongs at the database (planned).** The design puts the trust boundary in Supabase RLS, not app-layer checks: a schema allowlist (`analytics.*`, `data_staging.*`, `reference.*`) and tenant isolation enforced in Postgres. This is documented and intended, not yet implemented.
+- **Dark-first theming via CSS custom properties.** A near-black palette with a mint accent and 30+ design tokens, dual light/dark sets, and 0.4s transitions. Global theme edits happen in variables, not components.
 - **Borderless, elevation-based cards + tuned motion.** Floating cards (shadow + hover translate, no borders) and a human-tuned cubic-bezier easing with staggered entries give it a premium, low-fatigue feel suited to an always-on ops screen.
 
 ## Code Samples
 
-The theme provider — `localStorage` persistence with an SSR hydration guard so the first paint doesn't flash the wrong theme:
+The theme provider uses `localStorage` persistence with an SSR hydration guard so the first paint doesn't flash the wrong theme:
 
 ```tsx
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -59,7 +59,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 ```
 
-Stat cards animate in on a per-index stagger with a tuned easing curve — the small detail that makes the dashboard feel considered rather than templated:
+Stat cards animate in on a per-index stagger with a tuned easing curve, the small detail that makes the dashboard feel considered rather than templated:
 
 ```tsx
 <motion.div
@@ -78,14 +78,14 @@ These are verifiable facts about the current state, not outcomes:
 - **6 dependencies** (`next` 16, `react` 19, `framer-motion`, `lucide-react`, `@supabase/supabase-js`, plus Tailwind 4 tooling)
 - **30+ CSS custom properties** spanning dual dark/light themes
 - **1 route implemented** (the home dashboard); 6 further sections are designed in the nav but not yet built
-- **Honest gaps:** 0 SQL migrations, 0 RLS policies, 0 auth routes, 0 live Supabase queries — `@supabase/supabase-js` is installed but unused. Data is currently mock.
+- **Honest gaps:** 0 SQL migrations, 0 RLS policies, 0 auth routes, 0 live Supabase queries. `@supabase/supabase-js` is installed but unused. Data is currently mock.
 
 ## What I Learned
 
-- **A typed mock layer is a real deliverable, not a placeholder.** Designing `mock-data.ts` as the exact interface contract means the UI and the future data layer were negotiated before either was "done" — the backend now has a precise target instead of a moving one.
+- **A typed mock layer is a real deliverable, not a placeholder.** Designing `mock-data.ts` as the exact interface contract means the UI and the future data layer were negotiated before either was "done." The backend now has a precise target instead of a moving one.
 - **Decide the trust boundary before writing the first query.** Committing to RLS-at-the-database (not scattered app-layer checks) up front shapes the schema and the auth design; bolting authorization on later is how multi-tenant leaks happen.
-- **Honesty about phase is part of the portfolio.** This is a strong UI foundation with a clear next step — presenting it as a finished ops system would be the easy lie and the wrong one.
+- **Honesty about phase is part of the portfolio.** This is a strong UI foundation with a clear next step. Presenting it as a finished ops system would be the easy lie and the wrong one.
 
 ## Links
 
-Part of the `ai-projects` monorepo. UI foundation phase — data layer (OAuth + Supabase RLS) is the planned next step.
+Part of the `ai-projects` monorepo. UI foundation phase; the data layer (OAuth + Supabase RLS) is the planned next step.

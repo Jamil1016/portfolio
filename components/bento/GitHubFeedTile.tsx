@@ -17,7 +17,7 @@ export async function GitHubFeedTile() {
                 <span className="font-mono text-xs text-slate-500">
                   {c.repo.split("/")[1]}
                 </span>
-                {" — "}
+                {": "}
                 {c.message}
               </a>
             </li>

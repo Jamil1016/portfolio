@@ -5,7 +5,7 @@ import { useEffect } from "react";
 /**
  * Single-page home behaviors:
  * - Nav / CTA / footer links smooth-scroll to their section (offset for the
- *   sticky header). No view replacement — everything is one scrolling page.
+ *   sticky header). No view replacement. Everything is one scrolling page.
  * - Scroll-spy moves the nav underline to the section currently in view.
  * - Count-up + bar-fill animations fire when a section scrolls into view.
  *   Reduced-motion sets final values immediately.
