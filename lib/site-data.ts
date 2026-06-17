@@ -57,20 +57,25 @@ export type ExperienceEntry = {
 
 export const EXPERIENCE: ExperienceEntry[] = [
   {
-    when: "2023–now",
+    when: "2025–now",
     current: true,
-    role: "Data + AI Engineer · telecom operations",
-    what: "Own the nightly data platform end to end: ~14 ETL pipelines into a six-schema, 111-table Postgres warehouse (~12.2M rows), the agent layer that monitors them, and the reporting it feeds.",
+    role: "Data & AI Automation Engineer · Nanoninth (Ontel)",
+    what: "Hired as a Data Analyst; in practice I build the platform — solo. Replaced the team's manual pull-and-clean routine across API, Google/Microsoft Drive, Sheets and email with ~14 automated ETL pipelines into a 111-table Supabase warehouse (~12.2M rows), then automated the PDF reports and built dashboards on top. Beyond the data team I ship cross-department tools too — a Quote Automation System took accounting from 20–30 hand-checked quotes a day to 100–200+ — while my main build now is DARA (natural-language reporting via Claude + MCP) and AI pipeline monitoring.",
   },
   {
-    when: "2021–2023",
-    role: "Data Engineer · reporting & automation",
-    what: "Replaced manual finance and operations reporting with automated pipelines; first production LLM integrations.",
+    when: "2023–2025",
+    role: "Demand Planning Analyst II · Emerson (Copeland)",
+    what: "Demand planning for the HVACR business. Migrated a manual Excel forecast-tracking system into a real-time Power BI dashboard and wrote a Python script to clean, merge and consolidate the raw demand data — cutting analyst hours, improving accuracy, and giving stakeholders up-to-date insight instantly instead of waiting on hand-built reports.",
   },
   {
-    when: "2019–2021",
-    role: "Software Engineer · backend",
-    what: "APIs and integration work in Python; the plumbing years that made the platform years possible.",
+    when: "2020–2023",
+    role: "Quality Assurance Engineer · Citizen Finedevice",
+    what: "QA and compliance in precision manufacturing, where preparing quality reports meant manually collecting and cleaning data from multiple sources before any analysis could begin. Automated that collection and cleaning with Excel Macros, VBA and Power Query — 87.5% less reporting time — which freed the team for actual insight and fed Lean Six Sigma Kaizen work that cut defects by 4.9%. Earned the company's Top Management's Choice Award (2022) for the cumulative result: higher production rate, less time lost to reporting, and fewer rejects.",
+  },
+  {
+    when: "2016–2020",
+    role: "Service Crew · McDonald's Tanauan",
+    what: "Worked the front line through my Industrial Engineering degree — the years that taught pace, reliability, and showing up before the rest of the résumé existed.",
   },
 ];
 

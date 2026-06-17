@@ -1,32 +1,105 @@
-## What it is
+## The Problem
 
-A full-stack web app for generating quotes, with a rich-text editor, real-time
-collaboration, and one-click PDF export. Built to turn a manual, copy-paste quoting
-process into a fast, collaborative, repeatable workflow.
+Producing Ontel's quotes was a manual chain: pull the worklist of asset tasks, match each invoice line to the right asset metadata (parse a Site ID into subcon / GC / carrier / market / project / fuze ID), pick the correct priced service rate when several apply, build a branded A4 PDF by hand, and email it to the right recipients looked up by hand. Across a few hundred tasks at a time, it was slow, inconsistent, and easy to get wrong on either the pricing or the recipient.
+
+This app turns that chain into a reviewed, batched workflow: a queue reads the worklist and invoice options straight from the data platform, the operator overrides and verifies categories, then PDFs are generated to Drive and emails staged as Gmail drafts — in bulk, with a live view of who else is working alongside you.
 
 ## Architecture
 
+The app is read-heavy over the data platform: a Supabase view joins source tasks, invoice options, per-task overrides, and the recipient directory into one review surface. Generation and emailing are streaming batch operations.
+
 <MermaidDiagram>{`
-graph LR
-  U[Editor:<br/>TipTap rich text] --> RT[Realtime sync<br/>Supabase]
-  RT --> DB[(Supabase<br/>Postgres)]
-  U --> PDF[PDF export<br/>react-pdf]
-  T[Playwright tests] -.-> U
+graph TD
+  subgraph Sources[Supabase, synced upstream]
+    AT[stg_asset_tasks] --> VR[v_quote_review<br/>analytics view]
+    IF[stg_invoicing_form] --> VR
+    OV[stg_quote_overrides] --> VR
+    DIR[ref_quote_directory] --> VR
+  end
+  VR --> Q[Queue page<br/>review + verify]
+  Q --> GEN[Bulk PDF API<br/>react-pdf to Drive]
+  Q --> EM[Email queue API<br/>Gmail drafts]
+  GEN --> DR[(Google Drive)]
+  EM --> GM[(Gmail per-user OAuth)]
+  PR[Supabase Realtime<br/>presence] -.live roster.-> Q
 `}</MermaidDiagram>
 
-A Next.js front end with a TipTap rich-text editor syncs in real time through Supabase;
-quotes render to PDF on demand, and the critical flows are covered by Playwright tests.
+The Queue page calls `getQuoteData()`, which merges the `v_quote_review` analytics view (source data + parsed enrichment + operator overrides + directory matches), the invoice-option choices, generated-PDF state, and email history — filtering out anything already sent. The operator overrides fields (GC, carrier, market, project, service rate) and verifies a row. `/api/quote-pdf/bulk` renders the same `<QuoteDocument>` used for on-screen preview to a buffer via `@react-pdf` on the Node runtime, uploads concurrently to a Drive folder, and streams NDJSON progress. `/api/email-queue/schedule` renders TipTap email templates to Gmail MIME and creates **drafts** (not sends) in each user's OAuth'd account. A Supabase Realtime presence channel shows who's in the app and on which page.
 
-## Stack
+## Key Decisions
 
-Next.js · React · TypeScript · Tailwind · Supabase · TipTap · react-pdf · Playwright · Google Auth
+- **One SQL view, not N+1 queries.** `v_quote_review` joins tasks, invoice options, overrides, and the directory in the database; the app loads it once and merges generated/email state client-side. The product is read-heavy and de-normalized on purpose.
+- **Field-level overrides with read-modify-write.** `setOverride` merges the existing row before upserting a single field, so two operators editing different fields on the same task never clobber each other's work.
+- **Server-side PDF via `@react-pdf`, no headless browser.** The same component renders both the live preview and the server-side PDF to a buffer, uploaded straight to Drive — serverless-friendly and deterministic.
+- **Gmail drafts, not direct sends.** The app stages drafts in the user's account; the human stays in control of the actual send. It's auditable and avoids bounce/spam pitfalls.
+- **Validate before any I/O.** Bulk generation blocks rows with no price or no match (HTTP 422) before rendering or uploading a single PDF — fail early, run the good ones in parallel.
+- **Real-time presence for team coordination.** A `usePresence()` hook broadcasts user + page + idle status on a Supabase Realtime channel so the team can see who's working where and avoid duplicate effort.
 
-## Highlights
+## Code Samples
 
-- Real-time collaborative editing backed by Supabase.
-- Rich-text quote authoring with on-demand PDF export.
-- End-to-end test automation with Playwright.
+Field-level override — merge existing state, then upsert by `task_did`, so a single-field edit never wipes a teammate's:
+
+```typescript
+export async function setOverride(taskDid: string, field: string, value: string | null) {
+  const email = await requireUser();
+  const svc = createServiceClient();
+  const ex = (await existingRow(svc, taskDid)) as Record<string, unknown>;
+  const merged = {
+    task_did: taskDid,
+    subcon: ex.subcon ?? null, gc: ex.gc ?? null, carrier: ex.carrier ?? null,
+    market: ex.market ?? null, project: ex.project ?? null, fuze_id: ex.fuze_id ?? null,
+    verified: ex.verified ?? false,
+    [field]: value, updated_by: email, updated_at: new Date().toISOString(),
+  };
+  const { error } = await svc.schema("data_staging")
+    .from("stg_quote_overrides").upsert(merged, { onConflict: "task_did" });
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+}
+```
+
+Bulk generation validates the whole batch first, then renders + uploads concurrently while streaming progress:
+
+```typescript
+const problems: ProblemEntry[] = [];
+for (const did of taskDids) {
+  const reason = quoteProblem(byDid.get(did));
+  if (reason) problems.push({ task_did: did, reason });
+}
+if (problems.length > 0) {
+  return Response.json({ error: "problems", problems }, { status: 422 });
+}
+const stream = new ReadableStream<Uint8Array>({
+  async start(controller) {
+    const emit = (e: BulkEvent) => controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
+    const uploader = await getQuoteUploader();
+    await mapPool(ordered, CONCURRENCY, async (row) => {
+      const pdf = await renderQuotePdf(row);
+      const { link } = await uploader.upload(quoteFilename(row.asset_name), pdf);
+      emit({ type: "progress", asset: row.asset_name, ok: true, link });
+    });
+  },
+});
+```
+
+## Metrics
+
+These are verifiable facts about the system, not measured outcomes:
+
+- **8 pages** and **7 API routes**; **44 React components** and **34 lib modules**
+- **522 commits** in active development since early June 2026
+- **16 unit/integration test files** (email MIME, templating, safety, token crypto, send identities, auth allowlist, …) plus Playwright configured
+- Persistence across **8 `data_staging` tables**, **5 analytics views**, and the `ref_quote_directory` reference table
+- Bulk PDF generation runs at **concurrency 4**, streaming NDJSON progress; emails staged as Gmail **drafts**
+- Real-time presence over a Supabase Realtime channel (`quote-app-presence`), de-duplicated per user across tabs
+- Operates over a worklist of **~322 tasks** at the time of writing
+
+## What I Learned
+
+- **Push the join into the database.** Assembling the review surface as one analytics view instead of stitching it in the app removed a class of N+1 problems and made the queue load in a single round trip.
+- **Make concurrent edits safe by construction.** Read-modify-write on a single override field is a tiny pattern that quietly prevents the "two people, one task, lost edit" bug that real-time collaboration would otherwise invite.
+- **Draft, don't send.** Generating Gmail drafts instead of firing emails kept a human in the loop on the highest-stakes step and made the whole pipeline auditable — the right default for anything customer-facing.
 
 ## Links
 
-Part of the `ai-projects` monorepo; standalone open-source repo coming soon.
+Part of the `ai-projects` monorepo. A mature internal tool, in production. Data is read from the Supabase data platform (synced upstream); there is no separate external quotation API.

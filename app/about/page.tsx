@@ -7,25 +7,39 @@ export default function About() {
       <h1 className="mt-6 text-3xl font-semibold text-slate-50">About</h1>
       <div className="prose prose-invert prose-slate mt-6">
         <p>
-          I&apos;m Jamil Mendez — a data and AI engineer. I build the systems that turn
-          operational telemetry into measurable, debuggable, and mostly self-healing
-          pipelines.
+          I&apos;m Jamil Mendez — a Data &amp; AI Automation Engineer. I take the manual,
+          repetitive parts of data work — pulling from APIs, drives, sheets and inboxes,
+          cleaning it in Excel, rebuilding the same reports by hand — and turn them into
+          pipelines that run unattended.
         </p>
         <p>
-          Most of my last two years has been spent on three things: making nightly ETL
-          fast and observable, building AI agents that wrap internal data the way a
-          senior analyst would, and removing the kinds of recurring incidents that
-          turn into 2 AM Slack threads.
+          That instinct has been the through-line of my whole career. I trained as an
+          Industrial Engineer and started on the QA floor at Citizen Finedevice,
+          automating quality reports with VBA and Power Query. At Emerson (Copeland) I
+          moved into demand planning and migrated a manual Excel forecast system into a
+          live Power BI dashboard backed by a Python pipeline. Now, at Nanoninth (Ontel),
+          I build the company&apos;s data platform end to end — solo.
         </p>
-        <h2>Trajectory</h2>
         <p>
-          Data Analyst / Engineer → Senior Data Engineer → Data Platform / AI Engineering Lead.
+          Today that means roughly 14 ETL pipelines feeding a 111-table Supabase
+          warehouse, automated reports and dashboards that used to be assembled by hand,
+          and tools that reach beyond the data team — like a quoting web app that took
+          accounting from 20&ndash;30 quotes a day to more than 100. My main build right
+          now is DARA, an agent that lets stakeholders query the warehouse in plain
+          language (Claude&nbsp;+&nbsp;MCP), alongside an AI monitor that watches the
+          pipelines and diagnoses failures.
         </p>
-        <h2>In progress</h2>
+        <h2>What I&apos;m learning</h2>
+        <p>
+          My current focus is the <strong>Claude Certified Architect &mdash; Foundations
+          (CCA-F)</strong> track: each course maps to a real module in a capstone repo, so
+          the outcome is shipped artifacts, not just a badge. You can follow the live
+          progress on this site.
+        </p>
         <ul>
-          <li>Google Cloud Professional Data Engineer (target Q3 2026)</li>
-          <li>dbt Analytics Engineering Certification</li>
-          <li>13-week AI Engineer learning path (track on this site)</li>
+          <li>Now: Claude Certified Architect &mdash; Foundations (CCA-F)</li>
+          <li>Next: Google Cloud Professional Data Engineer</li>
+          <li>Then: dbt Analytics Engineering</li>
         </ul>
       </div>
     </main>
