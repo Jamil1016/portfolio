@@ -141,6 +141,17 @@ export default function Resume() {
                 github.com/Jamil1016
               </a>
             </div>
+            <div className="contact-line">
+              <a href="/resume.pdf" download>
+                Resume (PDF)
+              </a>
+              <a href="/cv.pdf" download>
+                CV (PDF)
+              </a>
+              <a href="/cover-letter.pdf" download>
+                Cover letter (PDF)
+              </a>
+            </div>
           </div>
         </section>
 
