@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Jamil Mendez - CV</title><style>
+  @page { size: A4; margin: 15mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #1f2933; font-size: 10.3pt; line-height: 1.45; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1 { font-size: 22pt; margin: 0 0 2px; letter-spacing: -0.01em; color: #0f172a; }
+  h2 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.12em; color: #0f766e; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1.4px solid #0f766e; }
+  h3 { font-size: 11.5pt; margin: 12px 0 0; color: #0f172a; }
+  p { margin: 4px 0; }
+  em { color: #52606d; font-style: italic; font-size: 9.6pt; }
+  strong { color: #0f172a; }
+  ul { margin: 5px 0 2px; padding-left: 16px; }
+  li { margin: 3px 0; }
+  a { color: #0f766e; text-decoration: none; }
+  code { font-family: Consolas, "SF Mono", monospace; font-size: 9.4pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+  hr { border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0; }
+  h1 + p { font-size: 11pt; color: #0f766e; font-weight: 600; margin: 2px 0; }
+  h1 + p + p { color: #52606d; font-size: 9.4pt; margin: 0 0 4px; }
+</style></head><body><h1>Jamil Mendez</h1>
+<p><strong>Data &amp; AI Automation Engineer</strong> · Santo Tomas City, Batangas, Philippines</p>
+<p>jamilmendez1016@gmail.com · 0993 369 3701 · github.com/Jamil1016 · jamil-mendez.vercel.app</p>
+<h2>Profile</h2>
+<p>Data &amp; AI Automation Engineer with an Industrial Engineering foundation and a track record of replacing manual, error-prone processes with systems that run on their own. Over four roles I have moved from front-line operations to QA automation, to demand-planning analytics, to building a full data platform and production AI agents. I am most useful where data is scattered across APIs, spreadsheets, drives, and email, and someone needs it pulled together, trustworthy, and queryable. I care about impact that holds up after I walk away: pipelines that recover from failure, reports that build themselves, and agents that ask before they act.</p>
+<h2>Skills</h2>
+<p><strong>Data &amp; Languages:</strong> Python (pandas, automation), SQL, PostgreSQL, DuckDB, Parquet</p>
+<p><strong>AI:</strong> Claude API, Model Context Protocol (MCP), natural-language-to-SQL, LLM agents, prompt engineering, LLM safety (human-in-the-loop, schema allowlists)</p>
+<p><strong>BI &amp; Reporting:</strong> Power BI, Power Query, Excel VBA and Macros, automated PDF reporting, dashboarding</p>
+<p><strong>Platform &amp; Tooling:</strong> Supabase, GitHub Actions, Next.js, FastAPI, Playwright, Google and Gmail APIs</p>
+<p><strong>Practices:</strong> ETL and incremental sync, data quality and deduplication, materialized views, Lean Six Sigma, Kaizen</p>
+<h2>Experience</h2>
+<h3>Data &amp; AI Automation Engineer · Nanoninth (Ontel)</h3>
+<p><em>2025 – present</em></p>
+<p>Hired as a Data Analyst; in practice I build and run the data platform solo.</p>
+<ul><li>Replaced a manual pull-and-clean routine spanning third-party APIs, Google and Microsoft Drive, Sheets, and email with roughly 14 automated ETL pipelines feeding a 111-table Supabase (Postgres) warehouse of about 12.2 million rows, with incremental sync and deduplication.</li><li>Built DARA, a chat-first natural-language reporting tool on Claude and MCP: it answers business questions in plain English, generating SQL against Postgres row-level security and a defined-metric library so numbers stay consistent.</li><li>Built Pipeline Guardian, an email-conversational remediation agent that classifies pipeline failures against a knowledge base, auto-fixes the safe cases inside a schema allowlist, and emails me for approval on the rest.</li><li>Shipped a Quote Automation System for the accounting team: a review queue, batch PDF generation to Drive, and Gmail-draft sending with live presence. It took quoting from 20 to 30 hand-checked quotes a day to 100 to 200 plus.</li><li>Automated PDF report generation and built the dashboards that sit on top of the warehouse.</li></ul>
+<h3>Demand Planning Analyst II · Emerson (Copeland)</h3>
+<p><em>2023 – 2025</em></p>
+<p>Demand planning for the HVACR business.</p>
+<ul><li>Migrated a manual Excel forecast-tracking system into a real-time Power BI dashboard, giving stakeholders live insight instead of waiting on analyst-built reports.</li><li>Wrote a Python pipeline to clean, merge, and consolidate raw demand data, cutting analyst hours and improving forecast accuracy.</li></ul>
+<h3>Quality Assurance Engineer · Citizen Finedevice</h3>
+<p><em>2020 – 2023</em></p>
+<p>QA and compliance in precision manufacturing.</p>
+<ul><li>Automated the data collection and cleaning behind quality reports using Excel Macros, VBA, and Power Query, reducing reporting time by 87.5% and freeing the team to focus on insight rather than data wrangling.</li><li>Fed Lean Six Sigma Kaizen initiatives that reduced defects by 4.9%.</li><li>Earned the company's Top Management's Choice Award (2022) for the cumulative result: higher production rate, less time lost to reporting, and fewer rejects.</li></ul>
+<h3>Service Crew · McDonald's Tanauan</h3>
+<p><em>2016 – 2020</em></p>
+<ul><li>Worked the front line throughout my Industrial Engineering degree. It taught pace, reliability, and discipline under pressure before the rest of the resume existed.</li></ul>
+<h2>Selected Projects</h2>
+<p>A fuller set, with architecture and code, lives at jamil-mendez.vercel.app.</p>
+<ul><li><strong>Async ETL Platform.</strong> Roughly 14 multi-pipeline workflows on GitHub Actions loading a 111-table Postgres warehouse, with incremental sync, deduplication, and materialized views.</li><li><strong>DARA (Data Analyst Reporting Agent).</strong> Chat-first NL-to-SQL analytics with Postgres row-level security and a defined-metric library, built on Claude and MCP.</li><li><strong>Pipeline Guardian.</strong> Email-conversational ETL remediation agent: an 18-pattern knowledge base, a three-tier severity router, a SQL schema allowlist for safety, and human approval by email.</li><li><strong>Quote Automation System.</strong> Internal quoting tool with a review queue, batch PDF-to-Drive generation, Gmail-draft emailing, and real-time presence; lifted output from 20 to 30 quotes a day to 100 to 200 plus.</li><li><strong>GC Asset Lake.</strong> Lakehouse-lite ETL with incremental API sync and hybrid hot (Postgres) and cold (Parquet plus DuckDB) storage.</li><li><strong>RFDS Extractor.</strong> Windows tool that scrapes telecom PDFs from Gmail and parses them deterministically, with an optional Claude fallback, packaged as a single executable.</li></ul>
+<h2>Education</h2>
+<p><strong>BS Industrial Engineering</strong>, Batangas State University, 2020</p>
+<h2>Awards &amp; Certifications</h2>
+<ul><li>Top Management's Choice Award, Citizen Finedevice (2022)</li><li>In progress: Claude Certified Architect, Foundations (CCA-F)</li></ul></body></html>
