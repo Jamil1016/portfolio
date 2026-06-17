@@ -18,7 +18,7 @@ Data & AI Automation Engineer with an Industrial Engineering foundation and a tr
 
 **Platform & Tooling:** Supabase, GitHub Actions, Next.js, FastAPI, Playwright, Google and Gmail APIs
 
-**Practices:** ETL and incremental sync, data quality and deduplication, materialized views, Lean Six Sigma, Kaizen
+**Practices:** ETL, data warehousing and data modeling, workflow orchestration, incremental sync, API integration, data quality and deduplication, materialized views, Lean Six Sigma, Kaizen
 
 ## Experience
 
@@ -31,7 +31,7 @@ Hired as a Data Analyst; in practice I build and run the data platform solo.
 - Built DARA, a chat-first natural-language reporting tool on Claude and MCP: it answers business questions in plain English, generating SQL against Postgres row-level security and a defined-metric library so numbers stay consistent.
 - Built Pipeline Guardian, an email-conversational remediation agent that classifies pipeline failures against a knowledge base, auto-fixes the safe cases inside a schema allowlist, and emails me for approval on the rest.
 - Shipped a Quote Automation System for the accounting team: a review queue, batch PDF generation to Drive, and Gmail-draft sending with live presence. It took quoting from 20 to 30 hand-checked quotes a day to 100 to 200 plus.
-- Automated PDF report generation and built the dashboards that sit on top of the warehouse.
+- Automated the recurring PDF reports and built the warehouse dashboards so they refresh without manual assembly.
 
 ### Demand Planning Analyst II · Emerson (Copeland)
 *2023 – 2025*
@@ -39,7 +39,7 @@ Hired as a Data Analyst; in practice I build and run the data platform solo.
 Demand planning for the HVACR business.
 
 - Migrated a manual Excel forecast-tracking system into a real-time Power BI dashboard, giving stakeholders live insight instead of waiting on analyst-built reports.
-- Wrote a Python pipeline to clean, merge, and consolidate raw demand data, cutting analyst hours and improving forecast accuracy.
+- Wrote a Python pipeline to clean, merge, and consolidate raw demand data, removing the manual prep step entirely and freeing analyst hours every cycle.
 
 ### Quality Assurance Engineer · Citizen Finedevice
 *2020 – 2023*
