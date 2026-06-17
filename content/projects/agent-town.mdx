@@ -1,34 +1,80 @@
-## What it is
+## The Problem
 
-A real-time visualization that renders a software monorepo as a living, top-down
-pixel-art town. Each project is a building; dev activity (commits, CI runs) animates the
-world — buildings light up, NPCs move — so the health and momentum of a multi-project
-codebase is legible at a glance instead of buried in dashboards.
+Across a monorepo of side projects, "what's happening right now" lives in places nobody watches: GitHub Actions run statuses, local file edits, the occasional commit. Dashboards exist, but a grid of green/red dots doesn't convey momentum — which project is actively being worked, which one's CI just caught fire, which one's gone stale. I wanted that state to be *ambient and glanceable* instead of something you go look up.
+
+So agent-town renders the monorepo as a living top-down pixel town. Each project is a building; activity animates the world — a session lights a building up, a CI run sends a caravan, a failure sets it on fire, neglect lets it go stale. The point isn't a game; it's turning dry run-logs into a metaphor you can read in one glance.
 
 ## Architecture
 
+A collector ingests raw events from adapters, a translator turns each event into a *town action* (the metaphor layer), an in-memory state machine tracks the town's mood, and everything broadcasts over WebSocket to a Phaser 3 client.
+
 <MermaidDiagram>{`
-graph LR
-  R[Repo activity:<br/>commits / CI] --> W[Node + WebSocket<br/>backend]
-  W -->|live events| C[Phaser 3 client]
-  C --> T[Town scene:<br/>buildings = projects]
-  C --> I[Interior scenes<br/>for key projects]
+graph TD
+  A1[pipeline-gha adapter<br/>polls GitHub Actions] --> CO[Collector<br/>Express :7373 loopback]
+  A2[git-watch adapter<br/>chokidar file watch] --> CO
+  CO --> TR[translator.ts<br/>RawEvent -> TownAction]
+  TR --> ST[town-state.ts<br/>buildings + workers]
+  ST -->|broadcast| WS[(WebSocket)]
+  WS --> CL[Phaser 3 client<br/>Vite]
+  CL --> OV[Overworld scene:<br/>buildings = projects]
+  CL --> IN[Interior scene<br/>local-pipeline]
 `}</MermaidDiagram>
 
-A Node/Express backend streams repo activity over WebSockets to a Phaser 3 client
-(bundled with Vite). The client maps each project to a building and reflects live events
-into the scene; key projects get their own interior views.
+Adapters emit `RawEvent`s: `pipeline-gha.ts` polls the GitHub Actions API (`run_start` / `run_success` / `run_fail`); `git-watch.ts` watches the filesystem (debounced) and polls `git log` for staleness. The collector (`server.ts`) accepts them on `POST /events`. The translator maps each of 10 event kinds to town actions — `tool_use` → a worker *crafts*, `run_success` → a caravan arrives with a sparkle. `town-state.ts` distinguishes **persistent** state (a building's active/idle/fire/stale status) from **transient** actions (caravans, effects) that broadcast but aren't stored, so a late-joining client sees the town's current mood without replaying history. The Phaser client places buildings per `town.config.ts` and animates state changes.
 
-## Stack
+## Key Decisions
 
-TypeScript · Phaser 3 · Vite · Express · WebSockets · Node.js
+- **A metaphor translation layer, not raw events to the renderer.** Events are mapped to a fantasy narrative in `translator.ts` (crafting, caravans, construction, fire) so the town reads as a cohesive world rather than a dashboard skin. The mapping is codified by a 12-case test suite.
+- **Persistent vs. transient state.** Building/worker status persists in `town-state.ts`; caravans and effects are ephemeral. Late joiners get a snapshot of the mood, not a backlog of past events.
+- **Loopback-only + origin-checked.** The collector binds to `127.0.0.1:7373` and origin-checks every POST and WebSocket upgrade — a single-developer local tool, hardened against CSRF rather than exposed as a service.
+- **Adapters are isolated and crash-safe.** Each adapter wraps its work in try/catch and returns a stop function; if the GitHub poll fails or the file watch hangs, the other keeps running and the collector stays up.
+- **Art is a pluggable manifest.** `assets.ts` lists every sprite, and NPC colors are assigned by hashing the actor ID — so an art pack is swapped by editing one file, not the scenes.
 
-## Highlights
+## Code Samples
 
-- Live, event-driven town that reacts to commits and CI in real time.
-- Projects-as-buildings metaphor; interior scenes for flagship projects.
-- An unusual, memorable way to make monorepo activity ambient and glanceable.
+The translator — the whole metaphor in one switch. A session start brings a building alive and walks a worker in; a tool use becomes an activity:
+
+```typescript
+export function translate(e: RawEvent): TownAction[] {
+  switch (e.kind) {
+    case 'session_start':
+      return [
+        { type: 'building', project: e.project, state: 'active', ts: e.ts },
+        { type: 'worker', project: e.project, actor: e.sessionId, activity: 'enter', ts: e.ts },
+      ]
+    case 'tool_use':
+      return [{ type: 'worker', project: e.project, actor: e.sessionId, activity: toolActivity(e.tool), ts: e.ts }]
+```
+
+State snapshots are built on a null-prototype object and defensively cloned — a guard against prototype pollution from event payloads:
+
+```typescript
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+// ...
+getSnapshot(): TownSnapshot {
+  return {
+    buildings: Object.assign(Object.create(null), this.buildings),
+    workers: Object.assign(Object.create(null), structuredClone(this.workers)),
+  }
+}
+```
+
+## Metrics
+
+These are verifiable facts about the system, not measured outcomes:
+
+- **~755 lines** of TypeScript across **16 source files** (5 collector, 10 web, 1 shared)
+- **10 event kinds** handled, mapped to **6 worker activities** and **5 building states**
+- **4 production dependencies** (`express`, `phaser`, `ws`, `chokidar`); **vitest** test suites for translator, state, and config
+- **15 buildings** placed from `town.config.ts`; **1** (local-pipeline) with an enterable interior scene
+- Collector binds **loopback-only on `:7373`** with origin checks on POST and WebSocket upgrade
+
+## What I Learned
+
+- **A translation layer is what makes data feel like a world.** Keeping the metaphor (events → town actions) separate from both ingestion and rendering meant I could tune the *feel* — what a CI run looks like — without touching adapters or scenes.
+- **Decide what persists and what's ephemeral up front.** The whole late-joiner experience falls out cleanly once "mood" is persistent state and "events" are transient broadcasts; conflating them would have forced an event-replay log nobody needed.
+- **Honest scope:** the mechanics, tests, and defensive collector are complete and working — the visual art (currently a CC0 placeholder pack) is the acknowledged gap before it looks as good as it behaves.
 
 ## Links
 
-[GitHub repo](https://github.com/jamilmendez-ontel/agent-town) — public.
+[GitHub repo](https://github.com/jamilmendez-ontel/agent-town) — public. A single-developer local tool; adapters are currently wired to two specific repos.

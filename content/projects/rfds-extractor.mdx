@@ -1,33 +1,84 @@
-## What it is
+## The Problem
 
-A desktop tool that scrapes telecom RFDS documents from Gmail attachments and exports the
-parsed data to monthly Excel files. It ships as a single bundled Windows executable so a
-non-technical operator can run it without a Python environment.
+RFDS (Radio Frequency Data Sheet) PDFs arrive in a Gmail inbox from multiple telecom carriers — AT&T, Verizon, T-Mobile, and others — each carrying ~30 structured fields per site (WOID, site ID, GPS, finance region, structure type, …). The existing process was a person opening each attachment and copy-pasting fields into a spreadsheet, every month, across hundreds of documents. It's slow, error-prone, and the layouts differ by carrier.
+
+The tool automates the whole loop: pull RFDS attachments from Gmail, detect which carrier template a PDF is, parse it deterministically, and write monthly per-carrier Excel workbooks an operator can hand straight to reporting. Crucially, it ships as one Windows `.exe` so a non-technical operator runs it with no Python install.
 
 ## Architecture
 
+Gmail I/O and PDF parsing have opposite bottlenecks — one is network-bound, the other CPU-bound — so they run on different pools. Deterministic parsing is the default path; Claude is a gated fallback only for AT&T PDFs the parser can't read.
+
 <MermaidDiagram>{`
-graph LR
-  G[(Gmail<br/>attachments)] --> P[pdfplumber<br/>deterministic parse]
-  P -->|standard template| X[openpyxl:<br/>monthly Excel]
-  P -->|non-standard| C[Claude fallback]
-  C --> X
+graph TD
+  G[(Gmail / OAuth)] -->|ThreadPool x N| DL[Download RFDS<br/>attachments]
+  DL -->|ProcessPool| DT[detect_template<br/>signature strings]
+  DT -->|att_iwm / verizon /<br/>t_mobile / cd_revision / vnoc| PR[Per-carrier parser<br/>pdfplumber tables]
+  DT -->|unknown| UN[UnknownRow<br/>email metadata only]
+  PR -->|parse failed + API key| CF[Claude fallback<br/>claude-haiku-4-5]
+  PR --> EW[IncrementalWriter]
+  CF --> EW
+  EW --> XL[Monthly workbooks<br/>per-carrier sheets + JSONL]
 `}</MermaidDiagram>
 
-A deterministic `pdfplumber` parser handles standard templates; non-standard layouts fall
-back to a Claude pass. Output is written to monthly Excel workbooks. The whole thing is
-packaged with PyInstaller into one `.exe`.
+`gmail_client.py` searches and downloads attachments over an OAuth'd Gmail service; a `ThreadPoolExecutor` keeps that network I/O from serializing. Each PDF's bytes go to a `ProcessPoolExecutor`, where `pdf_parser.detect_template()` matches carrier signature strings (a Verizon footer, a T-Mobile URL, a VNOC title, an AT&T "RFDSDetails" + WOID token) and routes to one of five per-carrier parsers backed by pdfplumber table extraction. If — and only if — an AT&T parse is marked `failed` *and* `ANTHROPIC_API_KEY` is set, it falls back to a Claude (`claude-haiku-4-5-20251001`) pass. Rows are appended via an `IncrementalWriter` that saves the workbook after every row (and mirrors to JSONL), grouped into monthly files with one worksheet per carrier.
 
-## Stack
+## Key Decisions
 
-Python · pdfplumber · openpyxl · Gmail API (OAuth) · PyInstaller · optional Claude fallback
+- **Deterministic first, Claude only on failure.** pdfplumber + signature matching parses standard templates in milliseconds with zero API cost and full auditability. The Claude fallback is opt-in (`ANTHROPIC_API_KEY`) and fires only for unrecognized AT&T layouts — the model is a safety net, not the engine.
+- **Two pools for two bottlenecks.** Gmail fetching is network-bound (threads); PDF parsing is CPU-bound and GIL-blocking (processes). Splitting them keeps the I/O threads unblocked while parses run in parallel.
+- **Incremental, crash-safe output.** `IncrementalWriter.add_row()` saves after every append, so a run that dies at row 501 still leaves 500 rows on disk — no need to re-pull from Gmail.
+- **Month × carrier worksheet grouping.** Email receive dates are converted to Eastern Time and bucketed into monthly workbooks (`2026-03.xlsx`), each with per-carrier tabs — matching how the ops team actually files reports.
+- **Single-file `.exe` with bundled OAuth client.** PyInstaller `--onefile` ships the tool with no Python dependency; the (non-secret) OAuth client ID is bundled while each user's token caches locally under `%USERPROFILE%\.rfds-extractor\`.
 
-## Highlights
+## Code Samples
 
-- Single-file bundled `.exe` — no runtime setup for the operator.
-- Deterministic parser first, Claude fallback only for non-standard templates (cost-aware).
-- Pulls straight from Gmail attachments; exports operator-ready Excel.
+Template detection — signature strings route each PDF to the right carrier parser, with `unknown` as the explicit fallthrough:
+
+```python
+def detect_template(pdf_bytes: bytes) -> str:
+    """Return one of: 'att_iwm', 'verizon', 't_mobile', 'cd_revision', 'vnoc', 'unknown'."""
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        text = "\n".join((p.extract_text() or "") for p in pdf.pages[:2])
+    if "Proprietary and Confidential. Not for disclosure outside of Verizon" in text:
+        return "verizon"
+    if "rfds.internal.t-mobile.com" in text:
+        return "t_mobile"
+    if "VENDOR NOTICE OF COMPLETION" in text:
+        return "vnoc"
+    compact = "".join(text.split())
+    if "RFDSDetails" in compact and ("WOID" in compact or "USID" in compact):
+        return "att_iwm"
+    return "unknown"
+```
+
+The fallback is gated by three conditions — wrong carrier, a successful parse, or a missing key all skip Claude entirely:
+
+```python
+if (
+    isinstance(row, AttIwmRow)
+    and row.parse_method == "failed"
+    and claude_fallback.is_available()
+):
+    row = claude_fallback.parse_pdf_with_claude(pdf_bytes)
+```
+
+## Metrics
+
+These are verifiable facts about the system, not curated outcomes:
+
+- **~3,500 lines** of Python across 16 modules; **908 lines** of tests across 9 test modules with real PDF fixtures
+- **6 document types** (AT&T IWM, Verizon, T-Mobile, CD Revision, VNOC, Unknown) via 5 per-carrier parsers
+- **9 dependencies** (`pdfplumber`, `openpyxl`, `google-api-python-client`, `google-auth-oauthlib`, `anthropic`, `tzdata`, `pytest`, `pyinstaller`)
+- **`claude-haiku-4-5-20251001`** as the gated fallback model
+- Ships as a **~56 MB single-file `.exe`** (PyInstaller `--onefile`)
+- Documented real run: **1,518 RFDS attachments parsed in ~1,251s**, written to monthly workbooks (119–836 rows/month)
+
+## What I Learned
+
+- **Reach for the LLM last, not first.** Deterministic parsing handles the overwhelming majority of real PDFs faster, cheaper, and more auditably than a model — Claude earns its place precisely because it's the rare-case fallback, not the default.
+- **Match the concurrency primitive to the bottleneck.** Threads for Gmail, processes for parsing: conflating them (one pool for both) would have either starved I/O or wasted the GIL. The split was the difference between a 20-minute run and a stalled one.
+- **Save-as-you-go is cheap insurance.** Per-row workbook saves cost almost nothing and turned "the run crashed, start over" into "the run crashed, resume from where it stopped."
 
 ## Links
 
-Part of the `ai-projects` monorepo; standalone open-source repo coming soon.
+Part of the `ai-projects` monorepo. A working, packaged Windows tool with a full test suite.
