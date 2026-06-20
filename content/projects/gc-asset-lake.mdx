@@ -25,7 +25,7 @@ graph TD
 
 - **Incremental by watermark, with a monthly full sweep as a safety net.** The `last_updated > watermark` gate means a run touches the ~30–60 changed projects instead of all of them; a periodic sweep backstops any missed change.
 - **Hot/cold tiering.** Cold = full-history Parquet (compressed from ~13 GB JSON), deduped on read; hot = a bounded Postgres window (`in_progress` projects or `last_updated` within 180 days), pruned after every load. Live queries stay fast; history stays cheap.
-- **`task_did` as the dedupe/upsert key.** Validated against the live Ontel table (2,599,284 rows: 0 null, 0 duplicate `task_did`) before committing to it, with an `md5(project|asset|task_name)` fallback for defense.
+- **`task_did` as the dedupe/upsert key.** Validated against a live production table (2,599,284 rows: 0 null, 0 duplicate `task_did`) before committing to it, with an `md5(project|asset|task_name)` fallback for defense.
 - **Direct Postgres connection, not the Supavisor pooler.** This is the specific fix for the `EMAXCONNSESSION` cascade that took down the predecessor.
 - **Pilot-first rollout via config, not code.** A `GC_ORG_DIDS` allowlist scopes Stage A to two orgs (~62 projects); clearing it opens Stage B to all non-internal orgs, with no code change to widen the blast radius.
 
@@ -38,7 +38,7 @@ def select_projects_sql(mode: str, has_org_filter: bool) -> str:
     lines = [
         "SELECT org_did, project_did, last_updated",
         "FROM data_staging.stg_projects",
-        "WHERE org_name <> 'Ontel' AND org_name NOT LIKE 'Testing%'",
+        "WHERE org_name <> 'INTERNAL_ORG' AND org_name NOT LIKE 'Testing%'",
         "  AND project_name NOT LIKE 'x_Archive:%' AND status <> 'pending'",
     ]
     if has_org_filter:
@@ -71,7 +71,7 @@ These are verifiable facts about the system, not measured outcomes:
 - **6 dependencies** (`requests`, `duckdb`, `pyarrow`, `psycopg2-binary`, `python-dotenv`, `pytest`)
 - **3 run modes** (incremental / sweep / backfill); **6-worker** thread pool for extraction
 - Hot window: **`in_progress` OR `last_updated` within 180 days**; cold storage: hive-partitioned Parquet, deduped on read
-- Dedupe key `task_did` validated against **2,599,284** live Ontel rows (0 null, 0 duplicate), the basis for the key, not GC rows processed
+- Dedupe key `task_did` validated against **2,599,284** live production rows (0 null, 0 duplicate), the basis for the key, not GC rows processed
 - Designed to replace a nightly **11.8M-row / ~13 GB JSON** full re-pull
 
 ## What I Learned
