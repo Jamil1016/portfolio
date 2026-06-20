@@ -66,9 +66,9 @@ if (
 
 These are verifiable facts about the system, not curated outcomes:
 
-- **~3,500 lines** of Python across 16 modules; **908 lines** of tests across 9 test modules with real PDF fixtures
+- **~2,350 lines** of Python across 16 modules; **908 lines** of tests across 9 test modules with real PDF fixtures
 - **6 document types** (AT&T IWM, Verizon, T-Mobile, CD Revision, VNOC, Unknown) via 5 per-carrier parsers
-- **9 dependencies** (`pdfplumber`, `openpyxl`, `google-api-python-client`, `google-auth-oauthlib`, `anthropic`, `tzdata`, `pytest`, `pyinstaller`)
+- **9 dependencies** (`pdfplumber`, `openpyxl`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `anthropic`, `tzdata`, `pytest`, `pyinstaller`)
 - **`claude-haiku-4-5-20251001`** as the gated fallback model
 - Ships as a **~56 MB single-file `.exe`** (PyInstaller `--onefile`)
 - Documented real run: **1,518 RFDS attachments parsed in ~1,251s**, written to monthly workbooks (119–836 rows/month)

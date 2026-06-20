@@ -21,8 +21,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Python", "asyncpg", "Postgres", "Supabase", "GitHub Actions", "Apps Script"],
     publicRepoUrl: "https://github.com/Jamil1016/local-pipeline",
     prod: "production",
-    code: "coming",
-    etaWeek: "W12",
+    code: "public",
     tags: ["python", "async", "etl", "postgresql", "materialized-views", "incremental-sync", "automation", "supabase", "dedup", "data-quality"],
   },
   {
@@ -42,8 +41,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Next.js", "TypeScript", "Supabase", "Claude API", "Postgres"],
     publicRepoUrl: "https://github.com/Jamil1016/data-analyst-reporting-agent",
     prod: "production",
-    code: "coming",
-    etaWeek: "W10",
+    code: "public",
     tags: ["typescript", "nextjs", "supabase", "claude-api", "nl-sql", "agent", "tool-use", "postgresql", "rls", "ai-safety"],
   },
   {
@@ -63,8 +61,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Python", "Postgres", "asyncpg", "GitHub Actions", "Apps Script", "Gmail API"],
     publicRepoUrl: "https://github.com/Jamil1016/date-validator",
     prod: "production",
-    code: "coming",
-    etaWeek: "W11",
+    code: "public",
     tags: ["python", "data-quality", "automation", "postgresql", "security", "dedup", "incremental-sync", "async"],
   },
   {
@@ -84,7 +81,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Python", "requests", "ThreadPoolExecutor", "openpyxl"],
     publicRepoUrl: "https://github.com/Jamil1016/swift-pdf-extractor",
     prod: "production",
-    code: "private",
+    code: "public",
     tags: ["python", "pdf", "automation", "etl", "incremental-sync"],
   },
   {
@@ -104,8 +101,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Python", "Claude API", "Gmail API", "Google Calendar API"],
     publicRepoUrl: "https://github.com/Jamil1016/daily-claude-digest",
     prod: "production",
-    code: "coming",
-    etaWeek: "soon",
+    code: "public",
     tags: ["python", "claude-api", "automation", "prompt-engineering"],
   },
   {
@@ -115,7 +111,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Python", "DuckDB", "Parquet", "Supabase", "psycopg2"],
     publicRepoUrl: "https://github.com/Jamil1016/gc-asset-lake",
     prod: "prototype",
-    code: "private",
+    code: "public",
     tags: ["python", "etl", "postgresql", "incremental-sync", "automation", "async"],
   },
   {
@@ -125,8 +121,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Next.js", "React", "TypeScript", "Supabase", "Playwright"],
     publicRepoUrl: "https://github.com/Jamil1016/quote-automation",
     prod: "production",
-    code: "coming",
-    etaWeek: "soon",
+    code: "public",
     tags: ["nextjs", "react", "typescript", "supabase", "automation", "pdf"],
   },
   {
@@ -136,7 +131,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Python", "pdfplumber", "Gmail API", "PyInstaller"],
     publicRepoUrl: "https://github.com/Jamil1016/rfds-extractor",
     prod: "production",
-    code: "private",
+    code: "public",
     tags: ["python", "email-parsing", "pdf", "claude-api", "automation"],
   },
   {
@@ -146,8 +141,7 @@ export const projects: ProjectMeta[] = [
     stack: ["Next.js", "React", "TypeScript", "Supabase", "Framer Motion"],
     publicRepoUrl: "https://github.com/Jamil1016/portal",
     prod: "prototype",
-    code: "coming",
-    etaWeek: "soon",
+    code: "public",
     tags: ["nextjs", "react", "typescript", "supabase", "security", "dashboards"],
   },
 ];

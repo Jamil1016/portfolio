@@ -1,6 +1,6 @@
 ## The Problem
 
-Ontel's internal tooling is spread across separate surfaces. ETL health lives in one place, the data explorer in another, reports somewhere else, and DARA (the chat analyst) in its own app. There's no single front door. The goal of portal is one signed-in operations surface that unifies data health, dashboards, reports, and the embedded analyst, built so customer-facing multi-tenancy can be layered on later without a re-platform.
+The company's internal tooling is spread across separate surfaces. ETL health lives in one place, the data explorer in another, reports somewhere else, and DARA (the chat analyst) in its own app. There's no single front door. The goal of portal is one signed-in operations surface that unifies data health, dashboards, reports, and the embedded analyst, built so customer-facing multi-tenancy can be layered on later without a re-platform.
 
 This entry is deliberately honest about where the project is: **portal is the UI foundation** for that surface, a complete, polished dashboard shell with a designed data model, not yet wired to live data. The backend (auth, RLS, real queries) is specified and is the next phase, not a claim I'll make before it's built.
 
@@ -74,9 +74,9 @@ Stat cards animate in on a per-index stagger with a tuned easing curve, the smal
 
 These are verifiable facts about the current state, not outcomes:
 
-- **~1,100 lines** across **11 TypeScript/TSX files**: 6 components, 2 context providers, 1 page, 1 layout, and `mock-data.ts`
+- **~1,350 lines** across **11 TypeScript/TSX files**: 6 components, 2 context providers, 1 page, 1 layout, and `mock-data.ts`
 - **6 dependencies** (`next` 16, `react` 19, `framer-motion`, `lucide-react`, `@supabase/supabase-js`, plus Tailwind 4 tooling)
-- **30+ CSS custom properties** spanning dual dark/light themes
+- **70+ CSS custom properties** spanning dual dark/light themes
 - **1 route implemented** (the home dashboard); 6 further sections are designed in the nav but not yet built
 - **Honest gaps:** 0 SQL migrations, 0 RLS policies, 0 auth routes, 0 live Supabase queries. `@supabase/supabase-js` is installed but unused. Data is currently mock.
 

@@ -1,6 +1,6 @@
 ## The Problem
 
-Producing Ontel's quotes was a manual chain: pull the worklist of asset tasks, match each invoice line to the right asset metadata (parse a Site ID into subcon / GC / carrier / market / project / fuze ID), pick the correct priced service rate when several apply, build a branded A4 PDF by hand, and email it to the right recipients looked up by hand. Across a few hundred tasks at a time, it was slow, inconsistent, and easy to get wrong on either the pricing or the recipient.
+Producing the company's quotes was a manual chain: pull the worklist of asset tasks, match each invoice line to the right asset metadata (parse a Site ID into subcon / GC / carrier / market / project / fuze ID), pick the correct priced service rate when several apply, build a branded A4 PDF by hand, and email it to the right recipients looked up by hand. Across a few hundred tasks at a time, it was slow, inconsistent, and easy to get wrong on either the pricing or the recipient.
 
 This app turns that chain into a reviewed, batched workflow: a queue reads the worklist and invoice options straight from the data platform, the operator overrides and verifies categories, then PDFs are generated to Drive and emails staged as Gmail drafts, in bulk, with a live view of who else is working alongside you.
 
@@ -10,10 +10,10 @@ The app is read-heavy over the data platform: a Supabase view joins source tasks
 
 <MermaidDiagram>{`
 graph TD
-  subgraph Sources[Supabase, synced upstream]
-    AT[stg_asset_tasks] --> VR[v_quote_review<br/>analytics view]
-    IF[stg_invoicing_form] --> VR
-    OV[stg_quote_overrides] --> VR
+  subgraph Sources[Supabase data platform]
+    AT[stg_asset_tasks<br/>synced upstream] --> VR[v_quote_review<br/>analytics view]
+    IF[stg_invoicing_form<br/>synced upstream] --> VR
+    OV[app_quote.overrides<br/>app-written] --> VR
     DIR[ref_quote_directory] --> VR
   end
   VR --> Q[Queue page<br/>review + verify]
@@ -51,8 +51,8 @@ export async function setOverride(taskDid: string, field: string, value: string 
     verified: ex.verified ?? false,
     [field]: value, updated_by: email, updated_at: new Date().toISOString(),
   };
-  const { error } = await svc.schema("data_staging")
-    .from("stg_quote_overrides").upsert(merged, { onConflict: "task_did" });
+  const { error } = await svc.schema("app_quote")
+    .from("overrides").upsert(merged, { onConflict: "task_did" });
   if (error) throw new Error(error.message);
   revalidatePath("/");
 }
@@ -86,10 +86,10 @@ const stream = new ReadableStream<Uint8Array>({
 
 These are verifiable facts about the system, not measured outcomes:
 
-- **8 pages** and **7 API routes**; **44 React components** and **34 lib modules**
-- **522 commits** in active development since early June 2026
-- **16 unit/integration test files** (email MIME, templating, safety, token crypto, send identities, auth allowlist, …) plus Playwright configured
-- Persistence across **8 `data_staging` tables**, **5 analytics views**, and the `ref_quote_directory` reference table
+- **8 pages** and **6 API routes**; **44 React components** and **40 lib modules**
+- **219 commits** in active development since early June 2026
+- **24 unit/integration test files** (email MIME, templating, safety, token crypto, send identities, auth allowlist, …) plus Playwright configured
+- Persistence across **7 `app_quote` tables** (the app's own schema, renamed from `data_staging`), with source reads from upstream `data_staging` tables and **5 analytics views/materialized views**, plus the `ref_quote_directory` reference table
 - Bulk PDF generation runs at **concurrency 4**, streaming NDJSON progress; emails staged as Gmail **drafts**
 - Real-time presence over a Supabase Realtime channel (`quote-app-presence`), de-duplicated per user across tabs
 - Operates over a worklist of **~322 tasks** at the time of writing
