@@ -165,7 +165,15 @@
 .home-shell .trk-edit textarea:focus, .home-shell .trk-edit input:focus { outline: none; border-color: var(--rule-strong); }
 .home-shell .trk-edit textarea { resize: vertical; min-height: 56px; line-height: 1.5; }
 .home-shell .trk-edit input { font-family: var(--font-mono), monospace; font-size: 12.5px; }
-.home-shell .trk-edit .saved { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--green); letter-spacing: 0.06em; height: 14px; }
+.home-shell .trk-edit-foot { display: flex; align-items: center; gap: 12px; }
+.home-shell .trk-save {
+  font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--btn-bg); color: var(--btn-fg); border: 1px solid var(--btn-bg); border-radius: 999px;
+  cursor: pointer; padding: 8px 18px; line-height: 1; transition: opacity 0.15s ease, background 0.15s ease;
+}
+.home-shell .trk-save:hover:not(:disabled) { opacity: 0.85; }
+.home-shell .trk-save:disabled { opacity: 0.4; cursor: not-allowed; }
+.home-shell .trk-edit .saved { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--faint); letter-spacing: 0.06em; height: 14px; }
 
 /* empty state when a filter matches nothing in a phase: hide the phase entirely
    (handled in JS). This is the page-level empty state. */

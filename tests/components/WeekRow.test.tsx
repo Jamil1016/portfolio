@@ -86,4 +86,25 @@ describe("WeekRow", () => {
     expect(screen.getByText(/Focus objective/)).toBeInTheDocument();
     expect(screen.getByRole("button", { expanded: true })).toBeInTheDocument();
   });
+
+  it("disables the Save button until notes or artifact change, then saves on click", async () => {
+    const { updateWeekStatus } = await import("@/app/dashboard/actions");
+    vi.mocked(updateWeekStatus).mockClear();
+
+    render(<WeekRow week={base} defaultOpen />);
+
+    const saveBtn = screen.getByRole("button", { name: /^save$/i });
+    expect(saveBtn).toBeDisabled();
+
+    fireEvent.change(screen.getByPlaceholderText(/Notes, takeaways/i), {
+      target: { value: "shipped the eval PR" },
+    });
+    expect(saveBtn).toBeEnabled();
+
+    fireEvent.click(saveBtn);
+    expect(updateWeekStatus).toHaveBeenCalledWith("abc", {
+      notes: "shipped the eval PR",
+      artifact_url: "",
+    });
+  });
 });
