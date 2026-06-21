@@ -18,11 +18,19 @@ export function Contact() {
           <a className="btn" href={`mailto:${CONTACT_EMAIL}`}>
             {CONTACT_EMAIL}
           </a>
-          <a className="link-u" href="/resume">
-            Resume (PDF) ↗
-          </a>
           <a className="link-u" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
             GitHub ↗
+          </a>
+        </div>
+        <div className="docs-row">
+          <a className="link-u" href="/resume.pdf" target="_blank" rel="noopener noreferrer">
+            Resume (PDF) ↗
+          </a>
+          <a className="link-u" href="/cv.pdf" target="_blank" rel="noopener noreferrer">
+            CV (PDF) ↗
+          </a>
+          <a className="link-u" href="/cover-letter.pdf" target="_blank" rel="noopener noreferrer">
+            Cover letter (PDF) ↗
           </a>
         </div>
       </div>

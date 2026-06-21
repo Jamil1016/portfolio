@@ -8,7 +8,6 @@ export default function sitemap() {
     { url: BASE,                lastModified: now },
     { url: `${BASE}/projects`,  lastModified: now },
     { url: `${BASE}/about`,     lastModified: now },
-    { url: `${BASE}/resume`,    lastModified: now },
     ...projects.map((p) => ({
       url: `${BASE}/projects/${p.slug}`,
       lastModified: now,
