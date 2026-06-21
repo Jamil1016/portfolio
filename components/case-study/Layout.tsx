@@ -32,6 +32,18 @@ export function CaseStudyLayout({
                 <span key={s}>{s}</span>
               ))}
             </div>
+            {project.code === "public" && (
+              <div className="cs-repo">
+                <a
+                  className="link-u"
+                  href={project.publicRepoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View repository ↗
+                </a>
+              </div>
+            )}
             {project.code === "coming" && (
               <div className="cs-status">
                 Open-source reference implementation coming {project.etaWeek ?? "soon"}
