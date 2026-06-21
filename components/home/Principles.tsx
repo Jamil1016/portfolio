@@ -28,12 +28,14 @@ export function Principles() {
           <div className="eyebrow">How I work</div>
           <h2>Three things I optimize for.</h2>
         </div>
-        <div className="principles">
+        <div className="approach-list">
           {PRINCIPLES.map((p) => (
-            <div className="principle" key={p.n}>
-              <div className="pn">{p.n}</div>
-              <h3>{p.title}</h3>
-              <p>{p.body}</p>
+            <div className="approach-row" key={p.n}>
+              <span className="ap-n">{p.n}</span>
+              <div className="ap-body">
+                <h3>{p.title}</h3>
+                <p>{p.body}</p>
+              </div>
             </div>
           ))}
         </div>
