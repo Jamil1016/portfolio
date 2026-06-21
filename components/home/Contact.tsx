@@ -23,14 +23,14 @@ export function Contact() {
           </a>
         </div>
         <div className="docs-row">
-          <a className="link-u" href="/resume.pdf" target="_blank" rel="noopener noreferrer">
-            Resume (PDF) ↗
+          <a className="doc-pill" href="/resume.pdf" target="_blank" rel="noopener noreferrer">
+            Resume <span>PDF</span>
           </a>
-          <a className="link-u" href="/cv.pdf" target="_blank" rel="noopener noreferrer">
-            CV (PDF) ↗
+          <a className="doc-pill" href="/cv.pdf" target="_blank" rel="noopener noreferrer">
+            CV <span>PDF</span>
           </a>
-          <a className="link-u" href="/cover-letter.pdf" target="_blank" rel="noopener noreferrer">
-            Cover letter (PDF) ↗
+          <a className="doc-pill" href="/cover-letter.pdf" target="_blank" rel="noopener noreferrer">
+            Cover letter <span>PDF</span>
           </a>
         </div>
       </div>
