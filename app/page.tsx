@@ -6,6 +6,7 @@ import { Work } from "@/components/home/Work";
 import { Stack } from "@/components/home/Stack";
 import { Training } from "@/components/home/Training";
 import { Experience } from "@/components/home/Experience";
+import { Principles } from "@/components/home/Principles";
 import { Contact } from "@/components/home/Contact";
 import { HomeEffects } from "@/components/home/HomeEffects";
 
@@ -24,6 +25,7 @@ export default function HomePage() {
         {/* Server component: fetches the public learning snapshot. */}
         <Training />
         <Experience />
+        <Principles />
         <Contact />
       </main>
 
