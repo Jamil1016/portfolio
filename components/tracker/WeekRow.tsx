@@ -51,8 +51,14 @@ export function WeekRow({
   const [status, setStatus] = useState(week.status);
   const [notes, setNotes] = useState(week.notes ?? "");
   const [artifact, setArtifact] = useState(week.artifact_url ?? "");
+  // Last values persisted to the server; the editor is "dirty" when the live
+  // values diverge from these, which is what enables the Save button.
+  const [savedNotes, setSavedNotes] = useState(week.notes ?? "");
+  const [savedArtifact, setSavedArtifact] = useState(week.artifact_url ?? "");
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const dirty = notes !== savedNotes || artifact !== savedArtifact;
 
   function changeStatus(next: TrackerWeek["status"]) {
     setStatus(next);
@@ -62,8 +68,11 @@ export function WeekRow({
   }
 
   function saveText() {
+    if (!dirty || pending) return;
     startTransition(async () => {
       await updateWeekStatus(week.id, { notes, artifact_url: artifact });
+      setSavedNotes(notes);
+      setSavedArtifact(artifact);
       setSaved(true);
     });
   }
@@ -157,7 +166,6 @@ export function WeekRow({
                 setNotes(e.target.value);
                 setSaved(false);
               }}
-              onBlur={saveText}
               placeholder="Notes, takeaways, blockers…"
               rows={2}
             />
@@ -168,12 +176,21 @@ export function WeekRow({
                 setArtifact(e.target.value);
                 setSaved(false);
               }}
-              onBlur={saveText}
               placeholder="Artifact URL (PR, repo, post)…"
             />
-            <span className="saved" aria-live="polite">
-              {saved ? "Saved" : ""}
-            </span>
+            <div className="trk-edit-foot">
+              <button
+                type="button"
+                className="trk-save"
+                disabled={pending || !dirty}
+                onClick={saveText}
+              >
+                {pending ? "Saving…" : "Save"}
+              </button>
+              <span className="saved" aria-live="polite">
+                {pending ? "" : dirty ? "Unsaved changes" : saved ? "Saved" : ""}
+              </span>
+            </div>
           </div>
         </div>
       )}
