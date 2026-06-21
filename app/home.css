@@ -174,26 +174,37 @@ html { scroll-padding-top: 73px; }
 .home-shell .mobile-menu-btn[aria-expanded="true"] .mm-bars i:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
 .home-shell .mobile-menu-panel {
-  position: fixed; inset: 0; z-index: 55; background: var(--paper);
-  display: flex; flex-direction: column; justify-content: center; overflow-y: auto;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 55; background: var(--paper);
+  height: 100vh; height: 100dvh;            /* dvh = true viewport, ignores browser chrome */
+  display: flex; flex-direction: column; overflow-y: auto;
   /* clear the sticky header, then honor the notch on every edge */
-  padding-top: calc(92px + env(safe-area-inset-top));
-  padding-bottom: calc(48px + env(safe-area-inset-bottom));
-  padding-left: max(clamp(28px, 8vw, 56px), env(safe-area-inset-left));
-  padding-right: max(clamp(28px, 8vw, 56px), env(safe-area-inset-right));
+  padding-top: calc(84px + env(safe-area-inset-top));
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+  padding-left: max(clamp(24px, 7vw, 56px), env(safe-area-inset-left));
+  padding-right: max(clamp(24px, 7vw, 56px), env(safe-area-inset-right));
 }
-.home-shell .mm-links { display: flex; flex-direction: column; }
+/* the link list grows to fill the space between header and footer, centering
+   its rows; row padding flexes with viewport height so it fits without scroll */
+.home-shell .mm-links { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 .home-shell .mm-links a {
-  font-family: var(--font-serif), serif; font-size: clamp(22px, 5.5vw, 28px);
-  line-height: 1.2; color: var(--strong); text-decoration: none;
-  padding: 13px 0; display: flex; align-items: center; gap: 11px;   /* ~50px tall tap rows */
+  font-family: var(--font-serif), serif; font-size: clamp(23px, 6vw, 30px);
+  line-height: 1.1; color: var(--strong); text-decoration: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: clamp(12px, 2.4vh, 20px) 0; border-bottom: 1px solid var(--line);
   -webkit-tap-highlight-color: transparent;
 }
+.home-shell .mm-links a:first-child { border-top: 1px solid var(--line); }
 .home-shell .mm-links a:active { opacity: 0.55; }
+.home-shell .mm-label { display: inline-flex; align-items: center; gap: 10px; }
 .home-shell .mm-links a .mini-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.home-shell .mm-arrow {
+  font-family: var(--font-mono), monospace; font-size: 15px; color: var(--faint);
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.home-shell .mm-links a:active .mm-arrow { transform: translate(2px, -2px); }
 .home-shell .mm-foot {
-  margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--rule);
-  display: flex; flex-direction: column; align-items: flex-start; gap: 22px;
+  flex: 0 0 auto; margin-top: 22px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 }
 .home-shell .mm-foot .btn { font-size: 14px; padding: 14px 28px; }
 /* the theme toggle is a desktop-sized control; enlarge its hit area in the panel */

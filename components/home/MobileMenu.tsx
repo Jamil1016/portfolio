@@ -75,8 +75,13 @@ export function MobileMenu({
                 data-tablink={l.tablink}
                 onClick={() => setOpen(false)}
               >
-                {l.label}
-                {l.dot && <span className="mini-dot" />}
+                <span className="mm-label">
+                  {l.label}
+                  {l.dot && <span className="mini-dot" />}
+                </span>
+                <span className="mm-arrow" aria-hidden>
+                  ↗
+                </span>
               </a>
             ))}
           </nav>
