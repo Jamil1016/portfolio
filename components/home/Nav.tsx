@@ -1,4 +1,13 @@
 import { ThemeToggle } from "./ThemeToggle";
+import { MobileMenu } from "./MobileMenu";
+
+const MOBILE_LINKS = [
+  { href: "#hero", label: "Home", tablink: "home" },
+  { href: "#work", label: "Work", tablink: "work" },
+  { href: "#stack", label: "Stack", tablink: "stack" },
+  { href: "#training", label: "Training", tablink: "training", dot: true },
+  { href: "#experience", label: "About", tablink: "about" },
+];
 
 export function Nav() {
   return (
@@ -7,6 +16,7 @@ export function Nav() {
         <a className="wordmark" href="#hero" data-tablink="home">
           Jamil <em>Mendez.</em>
         </a>
+        <MobileMenu links={MOBILE_LINKS} cta={{ href: "#contact", label: "Get in touch" }} />
         <nav className="nav-links">
           <a href="#hero" className="tablink" data-tablink="home">
             Home

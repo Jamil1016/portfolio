@@ -114,6 +114,9 @@ html { scroll-padding-top: 73px; }
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   backdrop-filter: saturate(160%) blur(12px);
   -webkit-backdrop-filter: saturate(160%) blur(12px);
+  /* keep the wordmark/menu clear of the notch in landscape */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 .home-shell .nav { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .home-shell .wordmark { font-family: var(--font-serif), serif; font-size: 24px; color: var(--strong); text-decoration: none; white-space: nowrap; }
@@ -149,6 +152,66 @@ html { scroll-padding-top: 73px; }
 }
 .home-shell .theme-toggle button + button { border-left: 1px solid var(--line); }
 .home-shell .theme-toggle button.on { background: var(--btn-bg); color: var(--btn-fg); }
+
+/* mobile menu — hidden on desktop; the hamburger + overlay appear <=1100px
+   (see the responsive block). The desktop .nav-links markup is untouched. */
+.home-shell .mobile-menu-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 44px; height: 44px; margin-right: -8px;            /* 44px touch target */
+  background: transparent; border: none; cursor: pointer; color: var(--strong);
+  position: relative; z-index: 1;                            /* stay above the panel to close */
+  -webkit-tap-highlight-color: transparent;
+}
+.home-shell .mm-bars { display: inline-flex; flex-direction: column; gap: 5px; width: 22px; }
+.home-shell .mm-bars i {
+  display: block; height: 2px; background: currentColor; border-radius: 2px;
+  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.16s ease;
+  transform-origin: center;
+}
+/* hamburger morphs into an X while the panel is open */
+.home-shell .mobile-menu-btn[aria-expanded="true"] .mm-bars i:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.home-shell .mobile-menu-btn[aria-expanded="true"] .mm-bars i:nth-child(2) { opacity: 0; }
+.home-shell .mobile-menu-btn[aria-expanded="true"] .mm-bars i:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.home-shell .mobile-menu-panel {
+  position: fixed; inset: 0; z-index: 55; background: var(--paper);
+  display: flex; flex-direction: column; justify-content: center; overflow-y: auto;
+  /* clear the sticky header, then honor the notch on every edge */
+  padding-top: calc(92px + env(safe-area-inset-top));
+  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+  padding-left: max(clamp(28px, 8vw, 56px), env(safe-area-inset-left));
+  padding-right: max(clamp(28px, 8vw, 56px), env(safe-area-inset-right));
+}
+.home-shell .mm-links { display: flex; flex-direction: column; }
+.home-shell .mm-links a {
+  font-family: var(--font-serif), serif; font-size: clamp(30px, 9vw, 44px);
+  line-height: 1.15; color: var(--strong); text-decoration: none;
+  padding: 14px 0; display: flex; align-items: center; gap: 12px;   /* ~58px tall tap rows */
+  -webkit-tap-highlight-color: transparent;
+}
+.home-shell .mm-links a:active { opacity: 0.55; }
+.home-shell .mm-links a .mini-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.home-shell .mm-foot {
+  margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--rule);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 22px;
+}
+.home-shell .mm-foot .btn { font-size: 14px; padding: 14px 28px; }
+/* the theme toggle is a desktop-sized control; enlarge its hit area in the panel */
+.home-shell .mm-foot .theme-toggle button { padding: 11px 16px; font-size: 11.5px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-shell .mobile-menu-panel { animation: mm-fade 0.22s ease both; }
+  @keyframes mm-fade { from { opacity: 0; } to { opacity: 1; } }
+  /* links rise in sequence so the panel reads as one orchestrated reveal */
+  .home-shell .mm-links a { animation: mm-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .home-shell .mm-links a:nth-child(1) { animation-delay: 0.05s; }
+  .home-shell .mm-links a:nth-child(2) { animation-delay: 0.10s; }
+  .home-shell .mm-links a:nth-child(3) { animation-delay: 0.15s; }
+  .home-shell .mm-links a:nth-child(4) { animation-delay: 0.20s; }
+  .home-shell .mm-links a:nth-child(5) { animation-delay: 0.25s; }
+  .home-shell .mm-foot { animation: mm-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) 0.28s both; }
+  @keyframes mm-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+}
 
 /* ---------- hero ---------- */
 /* Fill the first viewport so the next section sits below the fold (no peek)
@@ -490,5 +553,32 @@ html { scroll-padding-top: 73px; }
   .home-shell .dd-grid { grid-template-columns: 1fr; }
   .home-shell .proj-row { grid-template-columns: 1fr; gap: 8px; }
   .home-shell .proj-row .pr-st { order: -1; }
-  .home-shell .nav-links a:not(.btn):not(.tt-link) { display: none; }
+  /* desktop nav links give way to the hamburger + overlay menu */
+  .home-shell .nav-links { display: none; }
+  .home-shell .mobile-menu-btn { display: inline-flex; }
+}
+
+/* ---------- phones: scale down type + spacing (additive) ---------- */
+@media (max-width: 600px) {
+  /* oversized display type */
+  .home-shell .hero-left h1 { font-size: clamp(36px, 10vw, 48px); }
+  .home-shell .sec-head h2 { font-size: clamp(34px, 9vw, 44px); }
+  .home-shell .page-intro h1 { font-size: clamp(34px, 9vw, 48px); }
+  .home-shell .contact h2 { font-size: clamp(40px, 11vw, 56px); }
+  .home-shell .card h3 { font-size: 27px; }
+  .home-shell .card.featured h3 { font-size: 32px; }
+
+  /* stats: single column, smaller numerals */
+  .home-shell .stats { grid-template-columns: 1fr; }
+  .home-shell .stat { padding: 18px 0 20px; }
+  .home-shell .stat + .stat { border-left: none; padding-left: 0; border-top: 1px solid var(--line); }
+  .home-shell .stat .num { font-size: 40px; }
+
+  /* tighter section + card rhythm */
+  .home-shell section.band { padding: 36px 0 56px; }
+  .home-shell .card { padding: 22px 20px; }
+  .home-shell .page-intro { padding: 40px 0 32px; }
+
+  /* case-study reading comfort — keep body at the 16px mobile floor, give it air */
+  .home-shell .cs-prose { font-size: 16px; line-height: 1.72; }
 }
