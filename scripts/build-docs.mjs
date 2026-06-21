@@ -74,8 +74,23 @@ const COMPACT = `
   h1 + p + p { font-size: 9pt; }
 `;
 
-const wrap = (title, body, compact) =>
-  `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}${compact ? COMPACT : ""}</style></head><body>${body}</body></html>`;
+// Cover-letter-only: a centered letterhead (name / title / contact + divider)
+// over a left-aligned, well-spaced letter body. Keeps the resume/CV untouched.
+const LETTER = `
+  @page { size: A4; margin: 24mm 24mm; }
+  body { font-size: 10.8pt; line-height: 1.6; }
+  h1 { text-align: center; font-size: 25pt; margin: 0 0 4px; }
+  h1 + p { text-align: center; font-size: 11.5pt; color: #0f766e; font-weight: 600; margin: 0 0 8px; }
+  h1 + p + p {
+    text-align: center; font-size: 9.4pt; color: #52606d; letter-spacing: 0.01em;
+    margin: 0 0 22px; padding-bottom: 20px; border-bottom: 1px solid #cbd5e1;
+  }
+  h1 + p + p + p { margin-top: 0; }
+  p { margin: 0 0 13px; }
+`;
+
+const wrap = (title, body, extraCss) =>
+  `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${CSS}${extraCss || ""}</style></head><body>${body}</body></html>`;
 
 function findBrowser() {
   const pf = process.env["ProgramFiles"] || "C:\\Program Files";
@@ -92,7 +107,7 @@ function findBrowser() {
 const DOCS = [
   { src: "documents/resume.md", html: "documents/resume.html", out: "public/resume.pdf", title: "Jamil Mendez - Resume", compact: true },
   { src: "documents/cv.md", html: "documents/cv.html", out: "public/cv.pdf", title: "Jamil Mendez - CV" },
-  { src: "documents/cover-letter.md", html: "documents/cover-letter.html", out: "public/cover-letter.pdf", title: "Jamil Mendez - Cover Letter" },
+  { src: "documents/cover-letter.md", html: "documents/cover-letter.html", out: "public/cover-letter.pdf", title: "Jamil Mendez - Cover Letter", letter: true },
 ];
 
 const browser = findBrowser();
@@ -102,7 +117,8 @@ console.log(`using browser: ${browser}`);
 for (const doc of DOCS) {
   const md = readFileSync(resolve(doc.src), "utf8");
   const htmlPath = resolve(doc.html);
-  writeFileSync(htmlPath, wrap(doc.title, mdToHtml(md), doc.compact), "utf8");
+  const extraCss = doc.compact ? COMPACT : doc.letter ? LETTER : "";
+  writeFileSync(htmlPath, wrap(doc.title, mdToHtml(md), extraCss), "utf8");
   const outPath = resolve(doc.out);
   const profile = mkdtempSync(join(tmpdir(), "docpdf-"));
   execFileSync(browser, [
