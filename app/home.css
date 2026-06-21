@@ -553,6 +553,10 @@ html { scroll-padding-top: 73px; }
   .home-shell .stat:nth-child(3) { border-left: none; padding-left: 0; }
   .home-shell .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
   .home-shell .work-grid { grid-template-columns: 1fr; }
+  /* ledger rows stack instead of cramming 3 columns (names were ellipsizing to "…") */
+  .home-shell .ledger-row { grid-template-columns: 1fr; gap: 5px; padding: 16px 0; }
+  .home-shell .ledger-row .name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
+  .home-shell .ledger-row .st { order: -1; }
   .home-shell .stack-grid { grid-template-columns: 1fr; }
   .home-shell .stack-col { padding-right: 0; }
   .home-shell .stack-col + .stack-col { border-left: none; padding-left: 0; margin-top: 48px; }
@@ -578,6 +582,10 @@ html { scroll-padding-top: 73px; }
   .home-shell .contact h2 { font-size: clamp(40px, 11vw, 56px); }
   .home-shell .card h3 { font-size: 27px; }
   .home-shell .card.featured h3 { font-size: 32px; }
+
+  /* work ledger: comfortable wrapped name size */
+  .home-shell .ledger-row .name { font-size: 22px; }
+  .home-shell .ledger-row .desc { font-size: 14px; }
 
   /* stats: single column, smaller numerals */
   .home-shell .stats { grid-template-columns: 1fr; }
