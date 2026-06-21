@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Instrument_Serif } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
@@ -21,6 +21,19 @@ export const metadata: Metadata = {
     description: "Portfolio, projects, and learning log.",
     images: ["/og-image.png"],
   },
+};
+
+// viewport-fit:cover lets the layout extend under the notch; the CSS then pads
+// content back in with env(safe-area-inset-*). themeColor tints the browser
+// chrome to match each theme's paper background.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4eee1" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0f1a" },
+  ],
 };
 
 // Applied before paint so the chosen theme never flashes. Defaults to "cream".
