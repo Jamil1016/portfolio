@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { STACK } from "@/lib/site-data";
 
 export function Stack() {
@@ -15,9 +16,12 @@ export function Stack() {
               {col.skills.map((s) => (
                 <div className="skill" key={s.name}>
                   <span className="nm">{s.name}</span>
-                  <span className="pc">{s.pct}</span>
-                  <span className="bar">
-                    <i data-w={s.pct} />
+                  <span className="ev">
+                    <span className="proof">{s.proof}</span>
+                    {" — "}
+                    <Link className="ev-link" href={`/projects/${s.projectSlug}`}>
+                      {s.projectName} →
+                    </Link>
                   </span>
                 </div>
               ))}

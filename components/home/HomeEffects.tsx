@@ -48,16 +48,6 @@ export function HomeEffects() {
           if (!en.isIntersecting || seen.has(en.target)) return;
           seen.add(en.target);
           en.target.querySelectorAll<HTMLElement>(".num[data-count]").forEach(countUp);
-          en.target.querySelectorAll<HTMLElement>("i[data-w]").forEach((b) => {
-            const w = (b.dataset.w || "0") + "%";
-            if (!motionOn()) {
-              b.style.width = w;
-            } else {
-              requestAnimationFrame(() => {
-                b.style.width = w;
-              });
-            }
-          });
         });
       },
       { threshold: 0.25 },
