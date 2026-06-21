@@ -484,6 +484,7 @@ html { scroll-padding-top: 73px; }
 .home-shell .cs-head .stack { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .home-shell .cs-head .stack span { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
 .home-shell .cs-head .cs-status { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--faint); margin-bottom: 16px; }
+.home-shell .cs-head .cs-repo { margin-bottom: 16px; }
 
 /* centered reading column for the case study (header + prose share it) */
 .home-shell .cs-wrap { width: 100%; max-width: 920px; margin: 0 auto; padding: 0 clamp(28px, 4vw, 56px); }
