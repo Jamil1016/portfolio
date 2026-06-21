@@ -20,30 +20,37 @@ export const STATS: Stat[] = [
   { value: 2, decimals: 0, suffix: "", label: "LLM agents in production" },
 ];
 
-export type Skill = { name: string; pct: number };
+// Each skill is backed by evidence, not a self-rated percentage: a concrete
+// proof phrase plus the real project (in lib/projects.ts) that demonstrates it.
+export type Skill = {
+  name: string;
+  proof: string;
+  projectSlug: string;
+  projectName: string;
+};
 export type SkillColumn = { title: string; skills: Skill[] };
 
 export const STACK: SkillColumn[] = [
   {
     title: "Data & Pipelines",
     skills: [
-      { name: "Python", pct: 95 },
-      { name: "PostgreSQL", pct: 92 },
-      { name: "Async ETL (asyncpg)", pct: 90 },
-      { name: "GitHub Actions", pct: 88 },
-      { name: "Supabase", pct: 85 },
-      { name: "Data quality & dedup", pct: 84 },
+      { name: "Python", proof: "12.2M rows across 14 pipelines", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
+      { name: "PostgreSQL", proof: "111 tables, materialized views", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
+      { name: "Async ETL (asyncpg)", proof: "12 concurrent GitHub Actions workflows", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
+      { name: "GitHub Actions", proof: "14 scheduled pipelines in production", projectSlug: "date-validator", projectName: "Cross-Source Date Validator" },
+      { name: "Supabase", proof: "backs 10 production systems", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
+      { name: "Data quality & dedup", proof: "per-carrier date reconciliation", projectSlug: "date-validator", projectName: "Cross-Source Date Validator" },
     ],
   },
   {
     title: "AI & Orchestration",
     skills: [
-      { name: "Claude API", pct: 95 },
-      { name: "Prompt engineering", pct: 92 },
-      { name: "Agent design & tool use", pct: 90 },
-      { name: "NL → SQL", pct: 90 },
-      { name: "Evals & safety rails", pct: 86 },
-      { name: "FastAPI + Next.js", pct: 82 },
+      { name: "Claude API", proof: "2 agents in production", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
+      { name: "Prompt engineering", proof: "eval-gated prompt suite", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
+      { name: "Agent design & tool use", proof: "human-in-the-loop tool approvals", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
+      { name: "NL → SQL", proof: "chat-first analytics over the warehouse", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
+      { name: "Evals & safety rails", proof: "Postgres RLS + eval harness", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
+      { name: "Next.js + TypeScript", proof: "3 shipped web apps", projectSlug: "portal", projectName: "Ops Portal" },
     ],
   },
 ];
