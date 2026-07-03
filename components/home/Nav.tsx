@@ -5,7 +5,7 @@ const MOBILE_LINKS = [
   { href: "#hero", label: "Home", tablink: "home" },
   { href: "#work", label: "Work", tablink: "work" },
   { href: "#stack", label: "Stack", tablink: "stack" },
-  { href: "#training", label: "Training", tablink: "training", dot: true },
+  // { href: "#training", label: "Training", tablink: "training", dot: true }, // hidden — WIP
   { href: "#experience", label: "About", tablink: "about" },
 ];
 
@@ -27,9 +27,10 @@ export function Nav() {
           <a href="#stack" className="tablink" data-tablink="stack">
             Stack
           </a>
+          {/* Training link hidden — WIP, re-enable when built out.
           <a href="#training" className="tablink" data-tablink="training">
             Training <span className="mini-dot" />
-          </a>
+          </a> */}
           <a href="#experience" className="tablink" data-tablink="about">
             About
           </a>
