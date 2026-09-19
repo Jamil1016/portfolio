@@ -19,6 +19,9 @@ export function ogCard({
   headline: string;
   line: string;
 }) {
+  // The default OG font has no arrow glyph.
+  headline = headline.replace(/\s*→\s*/g, " to ");
+  line = line.replace(/\s*→\s*/g, " to ");
   const host = SITE_URL.replace(/^https?:\/\//, "");
   return new ImageResponse(
     (
