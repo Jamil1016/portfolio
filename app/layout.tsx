@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Instrument_Serif } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
+import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_TAGLINE } from "@/lib/site-data";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -11,16 +12,21 @@ const serif = Instrument_Serif({
   variable: "--font-serif",
 });
 
+const TITLE = `${SITE_NAME} | ${SITE_TITLE}`;
+
 export const metadata: Metadata = {
-  title: "Jamil Mendez | Data + AI Engineer",
-  description:
-    "Engineer building production data pipelines and AI agents. Portfolio, projects, and learning log.",
-  metadataBase: new URL("https://jamilmendez.dev"),
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: SITE_TAGLINE,
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "Jamil Mendez | Data + AI Engineer",
-    description: "Portfolio, projects, and learning log.",
-    images: ["/og-image.png"],
+    type: "website",
+    siteName: SITE_NAME,
+    title: TITLE,
+    description: SITE_TAGLINE,
+    url: "/",
   },
+  twitter: { card: "summary_large_image", title: TITLE, description: SITE_TAGLINE },
 };
 
 // viewport-fit:cover lets the layout extend under the notch; the CSS then pads
@@ -49,7 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
+      <body className="min-h-screen font-sans antialiased">
         {children}
         <Analytics />
       </body>

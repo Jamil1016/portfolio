@@ -2,8 +2,27 @@
 // Source of truth for metrics/stack/experience lives here; projects + tags
 // come from lib/projects.ts and lib/tags.ts.
 
+// Canonical origin for metadata, sitemap, robots and OG images. Override with
+// NEXT_PUBLIC_SITE_URL when a custom domain is wired up.
+export const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://jamil-mendez.vercel.app"
+).replace(/\/+$/, "");
+
+export const SITE_NAME = "Jamil Mendez";
+export const SITE_TITLE = "Data & AI Automation Engineer";
+export const SITE_TAGLINE =
+  "I turn manual data work into pipelines, reports and agents that run unattended.";
+
 export const GITHUB_URL = "https://github.com/Jamil1016";
 export const CONTACT_EMAIL = "jamilmendez1016@gmail.com";
+// TODO(Jamil): paste your LinkedIn profile URL here. While this is empty the
+// LinkedIn link is hidden everywhere on the site.
+export const LINKEDIN_URL = "";
+export const RESUME_URL = "/resume.pdf";
+
+export const AVAILABILITY =
+  "Open to part-time and project work, about 20 hours a week, remote (UTC+8, evenings and weekends)";
+export const EXPERIENCE_LINE = "5+ years automating manual work";
 
 export type Stat = {
   value: number;

@@ -18,25 +18,41 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto max-w-sm px-4 py-24">
-      <h1 className="text-2xl font-semibold text-slate-50">Sign in</h1>
-      <p className="mt-2 text-sm text-slate-400">
+    <main className="cs-wrap" style={{ maxWidth: 440, paddingTop: 96, paddingBottom: 96 }}>
+      <div className="eyebrow">Private</div>
+      <h1
+        style={{
+          fontFamily: "var(--font-serif), serif",
+          fontWeight: 400,
+          fontSize: 44,
+          lineHeight: 1.05,
+          margin: "14px 0 8px",
+          color: "var(--strong)",
+        }}
+      >
+        Sign in
+      </h1>
+      <p style={{ color: "var(--dim)", fontSize: 15, margin: 0 }}>
         Private dashboard. Magic-link only.
       </p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
+      <form onSubmit={onSubmit} style={{ marginTop: 24, display: "grid", gap: 12 }}>
         <input
           type="email"
           required
+          aria-label="Email address"
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-slate-100"
+          style={{
+            width: "100%",
+            padding: "12px 14px",
+            border: "1px solid var(--rule)",
+            background: "var(--card)",
+            color: "var(--text)",
+            font: "inherit",
+          }}
         />
-        <button
-          type="submit"
-          disabled={state !== "idle"}
-          className="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-600 disabled:opacity-60"
-        >
+        <button type="submit" className="btn" disabled={state !== "idle"}>
           {state === "loading" ? "Sending..." : state === "sent" ? "Check your email" : "Send magic link"}
         </button>
       </form>

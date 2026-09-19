@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
+import { isAllowedEmail } from "@/lib/auth";
 
 type Patch = {
   status?: "not_started" | "in_progress" | "done";
@@ -12,7 +13,7 @@ type Patch = {
 export async function updateWeekStatus(id: string, patch: Patch) {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("unauthorized");
+  if (!user || !isAllowedEmail(user.email ?? "")) throw new Error("unauthorized");
 
   const update: Record<string, unknown> = { ...patch, updated_at: new Date().toISOString() };
   if (patch.status === "in_progress") update.started_at = new Date().toISOString();

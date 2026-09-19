@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import { getProjectBySlug, projects } from "@/lib/projects";
@@ -7,6 +8,25 @@ import { MermaidDiagram } from "@/components/case-study/MermaidDiagram";
 
 export async function generateStaticParams() {
   return projects.map((p) => ({ slug: p.slug }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const project = getProjectBySlug(slug);
+  if (!project) return { title: "Not found | Jamil Mendez" };
+  const title = `${project.name} | Case study | Jamil Mendez`;
+  const url = `/projects/${project.slug}`;
+  return {
+    title,
+    description: project.tagline,
+    alternates: { canonical: url },
+    openGraph: { type: "article", title, description: project.tagline, url },
+    twitter: { card: "summary_large_image", title, description: project.tagline },
+  };
 }
 
 const mdxComponents = {

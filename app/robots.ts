@@ -1,6 +1,9 @@
-export default function robots() {
+import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/site-data";
+
+export default function robots(): MetadataRoute.Robots {
   return {
     rules: { userAgent: "*", allow: "/", disallow: ["/dashboard", "/login", "/api"] },
-    sitemap: "https://jamilmendez.dev/sitemap.xml",
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

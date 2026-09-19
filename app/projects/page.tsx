@@ -1,10 +1,19 @@
+import type { Metadata } from "next";
 import "../home.css";
 import { projects } from "@/lib/projects";
 import { SiteHeader } from "@/components/home/SiteHeader";
 import { TagFilter } from "@/components/projects/TagFilter";
-import { GITHUB_URL, CONTACT_EMAIL } from "@/lib/site-data";
+import { SiteFooter } from "@/components/home/SiteFooter";
 
-export const metadata = { title: "Projects | Jamil Mendez" };
+const DESCRIPTION =
+  "Case studies of data pipelines, internal tools and LLM agents, each with an architecture diagram, key decisions and honest status.";
+
+export const metadata: Metadata = {
+  title: "Projects | Jamil Mendez",
+  description: DESCRIPTION,
+  alternates: { canonical: "/projects" },
+  openGraph: { title: "Projects | Jamil Mendez", description: DESCRIPTION, url: "/projects" },
+};
 
 export default function ProjectsIndex() {
   return (
@@ -16,8 +25,9 @@ export default function ProjectsIndex() {
             <div className="eyebrow">Projects · {projects.length} systems</div>
             <h1>Systems that operate themselves.</h1>
             <p className="sub">
-              Production data + AI systems, not toy demos. Filter by stack, pattern, or
-              domain. Every entry links to a case study with architecture diagrams.
+              Data and AI systems I designed and built. Filter by stack, pattern, or
+              domain. Every entry links to a case study with an architecture diagram and
+              says plainly whether it is in production, a pilot, or a prototype.
             </p>
           </div>
         </section>
@@ -29,18 +39,7 @@ export default function ProjectsIndex() {
         </section>
       </main>
 
-      <footer>
-        <div className="wrap foot">
-          <span>© 2026 Jamil Mendez</span>
-          <span>
-            <a href="/">Home</a>
-            <a href={`mailto:${CONTACT_EMAIL}`}>Email</a>
-            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-              GitHub
-            </a>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

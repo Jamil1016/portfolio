@@ -3,7 +3,16 @@ import { isAllowedEmail } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const { email } = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "invalid JSON body" }, { status: 400 });
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ ok: false, error: "invalid JSON body" }, { status: 400 });
+  }
+  const { email } = body as { email?: unknown };
 
   if (!email || typeof email !== "string" || !isAllowedEmail(email)) {
     // Always returns generic 200 to avoid enumerating the allowed email

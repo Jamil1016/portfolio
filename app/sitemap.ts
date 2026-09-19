@@ -1,15 +1,15 @@
+import type { MetadataRoute } from "next";
 import { projects } from "@/lib/projects";
+import { SITE_URL } from "@/lib/site-data";
 
-const BASE = "https://jamilmendez.dev"; // update after domain is wired
-
-export default function sitemap() {
+export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
   return [
-    { url: BASE,                lastModified: now },
-    { url: `${BASE}/projects`,  lastModified: now },
-    { url: `${BASE}/about`,     lastModified: now },
+    { url: SITE_URL, lastModified: now },
+    { url: `${SITE_URL}/projects`, lastModified: now },
+    { url: `${SITE_URL}/about`, lastModified: now },
     ...projects.map((p) => ({
-      url: `${BASE}/projects/${p.slug}`,
+      url: `${SITE_URL}/projects/${p.slug}`,
       lastModified: now,
     })),
   ];

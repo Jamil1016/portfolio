@@ -63,7 +63,10 @@
   * {
     @apply border-border;
   }
+  /* The editorial theme tokens live in app/home.css (keyed on data-theme).
+     The fallbacks are the cream theme so nothing flashes white or slate. */
   body {
-    @apply bg-background text-foreground;
+    background: var(--paper, #f4eee1);
+    color: var(--text, #1e1a12);
   }
 }
