@@ -47,7 +47,14 @@ export default async function ProjectCaseStudy({
 
   return (
     <CaseStudyLayout project={project}>
-      <MDXRemote source={source} components={mdxComponents} />
+      {/* blockJS defaults to true in next-mdx-remote 6 and strips the template
+          literal that carries each diagram's source. The MDX is first-party
+          (content/projects), and blockDangerousJS stays on. */}
+      <MDXRemote
+        source={source}
+        components={mdxComponents}
+        options={{ blockJS: false, blockDangerousJS: true }}
+      />
     </CaseStudyLayout>
   );
 }

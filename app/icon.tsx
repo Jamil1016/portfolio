@@ -2,6 +2,8 @@ import { ImageResponse } from "next/og";
 
 export const size = { width: 64, height: 64 };
 export const contentType = "image/png";
+// Edge runtime: next/og on the Node runtime fails on Windows ("Invalid URL").
+export const runtime = "edge";
 
 // "JM" monogram in the site's ink-on-cream colours.
 export default function Icon() {

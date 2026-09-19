@@ -5,6 +5,8 @@ import { SITE_NAME, SITE_TAGLINE } from "@/lib/site-data";
 export const alt = "Case study";
 export const size = OG_SIZE;
 export const contentType = "image/png";
+// Edge runtime: next/og on the Node runtime fails on Windows ("Invalid URL").
+export const runtime = "edge";
 
 export default function Image({ params }: { params: { slug: string } }) {
   const project = getProjectBySlug(params.slug);

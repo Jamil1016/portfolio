@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { mermaidOutline } from "@/lib/mermaid-outline";
 
 let mermaidImport: Promise<typeof import("mermaid")["default"]> | null = null;
 function getMermaid() {
@@ -34,7 +35,8 @@ function themeVars(theme: string) {
       };
 }
 
-export function MermaidDiagram({ children }: { children: string }) {
+export function MermaidDiagram({ children: raw }: { children?: string }) {
+  const children = typeof raw === "string" ? raw : "";
   const rawId = useId();
   const base = `mmd-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const counter = useRef(0);
@@ -45,6 +47,10 @@ export function MermaidDiagram({ children }: { children: string }) {
     let cancelled = false;
 
     function render() {
+      if (!children.trim()) {
+        setError("empty diagram source");
+        return;
+      }
       const theme = document.documentElement.dataset.theme || "cream";
       getMermaid()
         .then((mermaid) => {
@@ -87,7 +93,20 @@ export function MermaidDiagram({ children }: { children: string }) {
     return <pre className="cs-diagram cs-diagram--state">{children}</pre>;
   }
   if (!svg) {
-    return <div className="cs-diagram cs-diagram--state">rendering diagram…</div>;
+    // Server-rendered state. The <noscript> outline gives crawlers and no-JS
+    // readers the flow as text; with JS on, Mermaid replaces this block.
+    return (
+      <div className="cs-diagram cs-diagram--state">
+        <span>rendering diagram…</span>
+        <noscript>
+          <ul className="cs-diagram-outline">
+            {mermaidOutline(children).map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </noscript>
+      </div>
+    );
   }
   return <div className="cs-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
