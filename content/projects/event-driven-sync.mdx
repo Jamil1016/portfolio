@@ -1,0 +1,122 @@
+## Status
+
+**One job is in production (since September 2026). The event listener is deployed and running in shadow, pending a parity streak.** The hourly sharded sync job feeds a live analytics view. The listener has been running on Cloud Run since July 2026, writing to shadow tables for a small set of pilot projects; the older batch pipeline stays authoritative for that data until the shadow output passes a nightly parity audit for a sustained streak. No cutover has happened yet.
+
+## The Problem
+
+The first-generation extractors (see the [Async ETL Platform](/projects/local-pipeline)) pull from the vendor's project-management API on a schedule. Scheduled pulls have two costs. Data is stale by up to the schedule interval, and most runs do work for nothing: on a quiet hour, nearly every project is unchanged, but a batch job still walks all of them to find that out.
+
+The vendor's web app, however, is backed by a Firebase Realtime Database, which can be read as a server-sent event (SSE) stream, and each project exposes a small "something changed" channel. That is a change signal I did not have to build. The second generation listens to it, walks only the project that changed, and keeps a scheduled reconcile as the safety net for anything the event path misses.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph TD
+  RT[(Vendor realtime DB<br/>per-project change channel)] -->|SSE| L[Listener<br/>Cloud Run service, min-instances=1]
+  L --> DB1[Debouncer<br/>60s quiet period per project]
+  DB1 --> W[Incremental walk<br/>of that one project]
+  W -->|only new or moved<br/>assets and tasks| API[Vendor API]
+  W --> UP[Guarded upserts<br/>IS DISTINCT FROM]
+  UP --> PG[(Postgres<br/>shadow tables)]
+  CS[Cloud Scheduler<br/>hourly] --> J[Cloud Run job<br/>8 sharded tasks]
+  J --> W2[Same walk,<br/>all projects, skip unchanged]
+  W2 --> UP
+  PG --> AU[Nightly parity audit<br/>vs the batch output]
+  J --> HB[Success log line<br/>= dead-man heartbeat]
+  GH[GitHub Actions<br/>OIDC, no stored keys] -->|build + deploy| L
+  GH --> J
+`}</MermaidDiagram>
+
+It is Python (3.11+, psycopg 3 with a connection pool) in one repository with a shared `platform_core` package (settings, auth, API client, realtime client, debouncer, DB helpers, structured logging, the walk itself) and one package per pipeline. Pipelines import `platform_core` and never each other; a test walks the import graph to enforce it. Design decisions are recorded as ADRs (four accepted so far: separate repository for v2, change detection over SSE, which pipelines come next, and the one-repo-many-packages layout).
+
+**The listener** is a Cloud Run service pinned to one always-on instance with CPU always allocated, because it holds long-lived SSE connections rather than serving requests. It opens one subscription per watched project. The first event after a connect is the current value, not a change, so it is ignored. Every later event bumps a debouncer keyed by project. A main loop asks the debouncer once a second which projects have been quiet for 60 seconds and hands those to a small thread pool. Only one walk per project runs at a time; a change that lands mid-walk re-arms the debouncer instead of starting a second walk. Because Cloud Run expects an HTTP server, the process also serves a tiny health response on `$PORT`.
+
+**The walk** fetches a project's asset list, compares each asset's last-updated value with the stored one, visits only new or moved assets, and within those writes only new or moved tasks. A missing or unparseable timestamp always forces a visit: fail toward extra work, never toward staleness.
+
+**The safety net** is a Cloud Run job triggered hourly by Cloud Scheduler. It runs the same incremental walk over every configured project. A second pipeline runs as 8 parallel tasks: whole organizations are assigned to tasks greedily, largest first, and the split is deterministic, so every task computes the same assignment independently from `CLOUD_RUN_TASK_INDEX` and `CLOUD_RUN_TASK_COUNT` with no coordinator. It makes one list call per organization and walks a project only if its top-level watermark moved, with a forced full walk every 24 hours and any ambiguity resolved to "walk".
+
+**The audit.** A nightly parity audit compares the v2 shadow tables with the v1 batch output. v1 stays authoritative per pipeline until its replacement passes that audit for a streak.
+
+## Key Decisions
+
+- **Events for latency, reconcile for correctness.** The listener is an optimization. If it dies, data is late, not wrong, because the hourly job does the same walk. That is also why the dead-man alert is on the reconcile and not the listener: a silent listener is legitimate on a quiet day.
+- **Guard upserts on the values, not on a timestamp.** Every upsert is `ON CONFLICT ... DO UPDATE ... WHERE (stored columns) IS DISTINCT FROM (incoming columns)`. A row is rewritten only when something actually changed, so re-walking a project is free of write churn, replays are harmless, and `loaded_at` means "last time this row really changed". The timestamp comparison lives one level up, in deciding what to visit.
+- **Debounce per project.** An edit session in the vendor app produces a burst of change events. Waiting for 60 seconds of quiet turns a burst into one walk.
+- **Deterministic sharding without a coordinator.** Each task derives its share from its index. Nothing to keep in sync, nothing to fail.
+- **No stored cloud keys.** GitHub Actions deploys through workload identity federation (OIDC): the workflow gets a short-lived token, builds the image with Cloud Build into Artifact Registry tagged with the git SHA, and deploys. Merge to main is deploy, filtered by path per pipeline. Runtime secrets come from Secret Manager, granted per secret to the runtime service account; the code only ever reads environment variables. Containers run as a non-root user.
+- **Alert on errors and on silence.** Structured JSON logs feed two log-based alerts: one on any error line, one that fires when the reconcile's success line has been absent for three hours.
+- **Shadow before cutover.** v2 writes beside v1 and has to earn the switch.
+
+## Code Samples
+
+The debouncer, which is the whole event-to-walk policy in about fifteen lines:
+
+```python
+class Debouncer:
+    def __init__(self, quiet_seconds: float):
+        self._quiet = quiet_seconds
+        self._lock = threading.Lock()
+        self._last_bump: dict[str, float] = {}
+
+    def bump(self, key: str, now: float | None = None) -> None:
+        with self._lock:
+            self._last_bump[key] = time.time() if now is None else now
+
+    def ready(self, now: float | None = None) -> list[str]:
+        """Keys whose quiet period elapsed; returned keys are cleared."""
+        t = time.time() if now is None else now
+        with self._lock:
+            due = [k for k, ts in self._last_bump.items() if t - ts >= self._quiet]
+            for k in due:
+                del self._last_bump[k]
+            return due
+```
+
+A guarded, idempotent upsert (columns shortened):
+
+```sql
+INSERT INTO assets (asset_id, project_id, name, status, last_updated, loaded_at)
+VALUES (%s, %s, %s, %s, %s, now())
+ON CONFLICT (asset_id) DO UPDATE SET
+  project_id   = EXCLUDED.project_id,
+  name         = EXCLUDED.name,
+  status       = EXCLUDED.status,
+  last_updated = EXCLUDED.last_updated,
+  loaded_at    = now()
+WHERE (assets.project_id, assets.name, assets.status, assets.last_updated)
+      IS DISTINCT FROM
+      (EXCLUDED.project_id, EXCLUDED.name, EXCLUDED.status, EXCLUDED.last_updated);
+```
+
+Deterministic sharding, computed identically by every task:
+
+```python
+def shard_from_env() -> tuple[int, int]:
+    return (int(os.getenv("CLOUD_RUN_TASK_INDEX", "0")),
+            int(os.getenv("CLOUD_RUN_TASK_COUNT", "1")))
+
+def shard(ids: list[str], index: int, count: int) -> list[str]:
+    return ids[index::count]
+```
+
+## Metrics
+
+From the repository's README, ADRs and code comments, re-checked on 2026-09-19:
+
+- **Quiet-hour cost**, measured before and after skipping unchanged projects: from about 290 API calls and 440 vCPU-seconds to about 100 calls and well under 100 vCPU-seconds.
+- **Freshness on the event path:** about 20 seconds from a change to the database, against up to 58 minutes of staleness on the batch schedule (recorded in the ADR when the listener went live).
+- **Initial seed:** about 41k tasks loaded in 13 minutes with zero fetch failures.
+- **Two query fixes** found through disk-I/O investigation: scoping two joins to the project and to the asset ids being written removed sequential scans that were reading about 2.3 GB and 2.4 GB per call.
+- **15 test files, 74 test functions**, including tests for the upsert guards and the import-graph rule.
+
+## What I Learned
+
+- **Use the change signal that already exists.** The vendor's realtime channel meant I never had to poll to find out that nothing happened.
+- **An event path needs a boring twin.** Every property I care about (nothing missed, nothing duplicated) is guaranteed by the scheduled walk and the guarded upserts. The listener only makes it faster.
+- **Idempotency is cheapest at the write.** With `IS DISTINCT FROM` guards, the answer to "what if this runs twice, or overlaps, or replays?" is the same every time: nothing happens.
+- **Measure I/O, not just time.** Both expensive queries were fast enough to go unnoticed by duration. They showed up as disk reads.
+- **Alerting on absence catches what error alerts cannot.** A job that never runs logs no errors.
+
+## Links
+
+Code is private (employer system). Architecture and decisions are documented here.

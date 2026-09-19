@@ -1,0 +1,99 @@
+## Status
+
+**Pilot, in a test phase.** The app is deployed to a test environment with email in test mode. The sweep has recorded real missed runs there, but the report producers' reporting hooks are not merged yet, live dispatch has not been proven in production, and history in the ledger came from a backfill script. Read everything below as "built and tested", not "running the company's reports".
+
+## The Problem
+
+The [report suite](/projects/report-automation) runs as separate GitHub Actions workflows in more than one repository. Each one works, but nobody can answer simple questions across them: did this morning's report run, is one stuck, where is last Friday's PDF, who is allowed to download it? The answers live in workflow logs and inboxes.
+
+The ledger is one small app that every report tells about its runs. It records start, progress, finish and artifacts, dispatches the scheduled reports itself, notices when an expected run never happened, and lets the right people download the right files.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph TD
+  VC[Vercel cron] --> DSP[Dispatch route<br/>pre-creates a queued run]
+  DSP -->|repository_dispatch| GHA[GitHub Actions<br/>report workflow]
+  GHA -->|POST start / progress / finish<br/>bearer token| API[Ingest API<br/>zod-validated]
+  API --> CL[Claim on external key<br/>unique index]
+  CL --> PG[(Ledger schema<br/>RLS deny-all, service role only)]
+  GHA -->|signed upload URL| ST[(Private storage bucket)]
+  VC --> SW[Sweep<br/>missed + stuck runs]
+  SW --> PG
+  PG --> AL[Failure alert<br/>once per run]
+  UI[Viewer / admin UI] -->|grant check| DL[Signed download URL<br/>10 minute expiry]
+  DL --> ST
+`}</MermaidDiagram>
+
+It is Next.js 16 (App Router), React 19, TypeScript, Supabase (Postgres, auth, storage) and zod. The ledger lives in its own Postgres schema with row-level security set to deny everything; all access goes through the server with the service role. The core logic (`startRun`, `finishRun`, the sweep, access rules) is written against a `LedgerStore` interface with a Supabase implementation and an in-memory one, so the unit tests run the real logic with no database.
+
+**Ingest API.** Five routes: start a run, report progress, finish, request a signed upload URL for an artifact, and register the artifact. Each checks `Authorization: Bearer <token>` with a constant-time comparison (and fails closed when the secret is unset), then parses the body with a zod schema; a bad body is a 400 with the issues listed. Route handlers are thin: auth, parse, call the ledger function.
+
+**Scheduling.** A Vercel cron hits a dispatch route (itself protected by the cron secret). The route pre-creates a `queued` run with an external key of the form `dispatch:<id>`, then POSTs a `repository_dispatch` event to the report's repository. When the workflow starts, it calls `/start` with the same key and claims that row. Reports that are not dispatched from here can still report in; they are simply observed.
+
+**Artifacts and access.** Files go into a private bucket under `<report>/<run>/<filename>`. Uploads use signed upload URLs with a size limit. Downloads are minted server-side as signed URLs that expire after 10 minutes, and only after an access check: admins see everything, viewers see only the reports they were granted. A viewer asking for a file they cannot see gets a 404, not a 403.
+
+## Key Decisions
+
+- **Idempotent claims on an external key.** A partial unique index on (report, external key) is the guarantee. `startRun` looks the key up first: a `queued` or `missed` row is claimed and flipped to `running`; any other existing row is returned unchanged; and if two starts race on insert, the loser catches the unique violation and returns the winner. A duplicate start is never a 5xx, so producers can retry blindly.
+- **Finish is idempotent too.** The same terminal status again is a no-op. A different terminal status is a 409 unless the caller passes `force`.
+- **The sweep is a pure function.** For each active report with a schedule, it looks at the expected slots in the last 24 hours. No run near a slot becomes a `missed` row keyed `missed:<slot>`, so overlapping sweeps cannot insert it twice. A `queued` run never claimed within its grace period becomes `missed`; a `running` run past its maximum duration becomes `failed`. Because it takes "now" and the current rows as inputs, every edge case is a unit test.
+- **Failure alerts once per run.** The alert function returns early if the run's summary already carries an `alerted_at` stamp, and writes the stamp after sending. This is an application-level check-then-write, not a database constraint, which is an acceptable trade for an internal alert and is documented as such. Alerts are also gated per report and by an email mode (test or live).
+- **Dispatch from the ledger, not from each repository's cron.** The ledger knows a run was supposed to happen because it asked for it. That is what makes "missed" detectable at all.
+- **Know the platform's limits.** The test deployment is on a plan that allows each cron only once a day, so the sweep currently runs daily there instead of every 15 minutes. The config says so in a comment, and the deploy notes say what to restore.
+
+## Code Samples
+
+The claim logic behind `POST /api/runs/start` (simplified):
+
+```ts
+if (input.external_key) {
+  const existing = await store.findRunByExternalKey(input.report_key, input.external_key);
+  const decision = decideStart(existing);          // pure: claim | existing | create
+  if (decision.kind === "claim" && existing) {
+    const run = await store.updateRun(decision.runId, {
+      status: "running", started_at: startedAt, finished_at: null, error_text: null,
+    });
+    return { ok: true, value: toOutput(run, true) };
+  }
+  if (decision.kind === "existing" && existing) {
+    return { ok: true, value: toOutput(existing, false) };
+  }
+}
+try {
+  const run = await store.insertRun({ ...input, status: "running", started_at: startedAt });
+  return { ok: true, value: toOutput(run, true) };
+} catch (e) {
+  // Two producers raced on the same key: the unique index picked a winner.
+  if (e instanceof UniqueViolationError && input.external_key) {
+    const winner = await store.findRunByExternalKey(input.report_key, input.external_key);
+    if (winner) return { ok: true, value: toOutput(winner, false) };
+  }
+  throw e;
+}
+```
+
+The index that makes it safe:
+
+```sql
+create unique index run_external_key_once
+  on ledger.run (report_key, external_key)
+  where external_key is not null;
+```
+
+## Metrics
+
+- **193 unit tests and 6 end-to-end tests** passing at the 2026-08-27 handoff. A static count on 2026-09-19 finds 234 unit test cases across 40 test files and 11 end-to-end cases in 2 files (counted, not run).
+- **86 commits.**
+- **5 ingest routes, 2 crons** (one dispatch, one sweep) in the test deployment.
+
+## What I Learned
+
+- **Make the producer's life easy and the ledger's guarantees strict.** Producers can call start twice, finish twice, or crash between them. The unique index and the state functions absorb all of it.
+- **Write the core against an interface.** The in-memory store is why the logic has hundreds of fast tests and why the sweep could be a pure function.
+- **Say which guarantees are hard and which are best-effort.** The claim is a database constraint. The once-per-run alert is a stamp. Both are fine; pretending they are the same is not.
+- **A pilot should be labelled a pilot.** The app works end to end in its test environment. It has not yet carried a production report, and this page says so.
+
+## Links
+
+Code is private (employer system). Architecture and decisions are documented here.

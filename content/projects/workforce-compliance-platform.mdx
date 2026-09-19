@@ -1,0 +1,135 @@
+## The Problem
+
+Field and office staff file a daily report against the work they did. Leads are supposed to approve those reports in the vendor's project-management tool, HR is supposed to chase the ones that were never filed, and management wants a weekly picture per person. In practice each of those was a manual loop: leads approved one report at a time in a slow vendor screen, reminders were sent by hand when someone remembered, and the weekly picture was a spreadsheet someone rebuilt.
+
+The platform replaces those loops with one internal web app on top of the data warehouse. It has to do three things that are easy to get wrong: write approvals back to the vendor **as the person who approved them**, send reminders to real employees **without ever double-sending**, and keep working sensibly when the warehouse behind it is mid-refresh or briefly down.
+
+There is no LLM in this app. Summaries are rule-based and every number comes from SQL.
+
+## Architecture
+
+<MermaidDiagram>{`
+graph TD
+  WH[(Warehouse<br/>analytics views)] --> APP[Next.js app<br/>server components + actions]
+  G[Google sign-in] --> AL[Allowlist + role tier<br/>checked server-side]
+  AL --> APP
+  APP --> AP[Approvals queue]
+  AP -->|approver's own<br/>encrypted credentials| VAPI[Vendor API]
+  AP --> BB[(Durable batch tables<br/>claim with SKIP LOCKED)]
+  CR[Vercel crons] --> RM[Reminders<br/>every 5 min]
+  CR --> EX[Extract email<br/>twice a month]
+  CR --> WK[Weekly per-member<br/>PDF packs]
+  CR --> WM[Attachment cache<br/>warmer]
+  RM --> LOG[(Send log<br/>anti-join in RPC)]
+  WK --> PDF[Headless Chromium<br/>prints the real page]
+  PDF --> ST[(Private storage)]
+  WM --> ST
+`}</MermaidDiagram>
+
+The app is Next.js 16 (App Router) with React 19 and Supabase for Postgres, auth and storage. Pages are server components reading warehouse views; mutations are server actions. Almost all business logic lives in a pure, I/O-free domain layer, which is where most of the tests are.
+
+**Auth.** Sign-in is Google OAuth, but a successful OAuth exchange is not enough: the server looks the normalized email up in an allowlist table using the service role, and no row means no app user. Sign-in outcomes are written to an audit log. There are five ranked role tiers, from read-only viewer up to super admin, checked with one `roleAtLeast` helper that fails closed on an unknown role. Guards throw in server actions and redirect in pages. Sensitive features are gated by a single minimum-role constant each and enforced where the data is merged on the server, not only in the JSX. A super admin can preview the app as another user; every mutation is blocked while previewing.
+
+**Approvals with write-back.** Each lead connects their own vendor account once. The password is stored encrypted (AES-256-GCM, random IV per value, key from the environment) in a table that row-level security denies to everyone but the service role. At approve time the server decrypts it, logs in to the vendor as that user, and approves the report, so the vendor's own audit trail shows the real approver. The vendor session token lives only in an in-process cache and is never persisted. A partial unique index on the approval journal allows at most one successful approval per report, and the vendor's ambiguous "already in that status" error is resolved by reading the task back. A shared service account may read attachments but is never used to approve.
+
+**Four crons.** Reminders every 5 minutes; an extract workbook emailed on the 1st and 16th; weekly per-member PDF packs (hourly attempts over a window, Tuesday to Friday); and an attachment cache warmer every 15 minutes. Every cron route requires a bearer secret.
+
+## Key Decisions
+
+- **Durable, resumable bulk approve.** Approving a few hundred reports can outlive a browser tab. A batch is a header row plus one item row per report (queued, processing, approved, failed; attempts; retryable). The server action claims a chunk of 25 through an RPC that uses `FOR UPDATE SKIP LOCKED` and first requeues items stuck in `processing` for more than two minutes. It re-checks each report still needs approval, approves with bounded retries (re-login on 401, backoff on 5xx/408/429), commits each outcome row by row, then recomputes the header. The client just drives chunks in a loop; on mount it adopts any running batch, so closing the tab pauses at the last committed item. A partial unique index allows one running batch per approver. Retry requeues only the retryable failures.
+- **Reminders that cannot double-send, enforced in the database.** The candidate list comes from a `SECURITY DEFINER` RPC that anti-joins the send log: any (employee, work date, report, reminder tier) already sent live is dropped before the app sees it. The log's primary key is that same tuple. Doing it in SQL also avoids the API's silent 1000-row page limit that a suppression set loaded into TypeScript would hit. Precisely stated, this is at-most-once per successfully logged send: the app sends, then logs. That is why the next decision exists.
+- **Circuit breaker on log-write failure.** If writing the send log throws, the loop stops and sends nothing more in that run. A broken log cannot suppress repeats, so continuing would re-email people every five minutes.
+- **Four send modes, live double-gated.** `report` computes only; `sample` sends synthetic data to a test inbox; `preview` sends real candidates to a test inbox and logs them as preview, which never suppresses a live send; `live` needs both the mode and a separate environment flag, otherwise the route returns 409. Preview and live also fail closed if the go-live cutoff is unset.
+- **PDFs by printing the real page.** Management PDFs are not a second rendering of the report. Headless Chromium (`@sparticuz/chromium` with `playwright-core` on serverless) opens the real, access-controlled report route with the caller's session and prints it with print CSS. It waits for the report's own DOM marker because the page streams, fails fast on an error boundary, has a hard overall deadline, and inlines icons as SVG because serverless Chromium has no fonts. The weekly cron reuses one browser and page, and relaunches once if the browser dies.
+- **Weekly packs as a resumable run.** A run row plus one item per member (pending, rendered, sent, skipped, error; attempts capped), with a partial unique index so only one live run exists per week. Each hourly tick renders what it can inside a time budget, stores each PDF in a private bucket, and delivers only when every item is terminal. By default delivery is one review email to the operator with a signed link per pack; sending to members directly is a separate, explicitly enabled mode.
+- **Stale-data guards and degraded modes.** Unattended sends refuse to run on a rollup that is empty, behind the week's end, or whose health probe failed. The human-facing page is more lenient and shows a banner instead. Reads retry once on transient database errors with the client's own retry disabled so retries do not stack; failures are never cached; the live-refresh poll is health-gated and holds the last good page with a "Reconnecting" badge during an outage; the PDF route returns 503 during a rollup refresh.
+- **Streamed extracts with caps.** CSV is streamed from an async generator over range-paginated queries fetched in parallel waves (which requires a stable total order). Excel rows stream as NDJSON and the workbook is built in the browser, so it is capped at 50,000 rows, enforced mid-stream; the attachments ZIP is capped at 500 files. The UI shows live rows and megabytes.
+- **Thumbnail cache in private storage.** Attachment images get two WebP derivatives (a cropped thumbnail and a display size) rendered with `sharp` after the response is sent, stored in a private bucket, and served through short-lived signed URLs. The originals proxy decides inline vs download from the MIME type actually served and sends `nosniff` and a sandbox CSP.
+- **A rules engine HR can check.** Repeated-infraction rules (a count within one calendar month, or a count across a rolling window of consecutive months) live in one 160-line pure module with per-track configuration. Months are handled as strings, with no `Date` and no timezone. The tests are named after HR's own acceptance scenarios, so a policy question becomes "which scenario is that?". Excusals are an append-only, latest-wins log that recomputes the counts.
+
+## Code Samples
+
+Claiming a chunk of a bulk-approve batch. Stuck items are requeued first, and `SKIP LOCKED` lets two tabs drive the same batch without taking the same item (names genericized):
+
+```sql
+CREATE FUNCTION app.claim_approval_items(p_batch_id uuid, p_limit int)
+RETURNS SETOF text LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE app.approval_batch_item
+     SET status = 'queued', updated_at = now()
+   WHERE batch_id = p_batch_id AND status = 'processing'
+     AND updated_at < now() - interval '2 minutes';
+
+  RETURN QUERY
+  UPDATE app.approval_batch_item
+     SET status = 'processing', updated_at = now()
+   WHERE (batch_id, report_id) IN (
+     SELECT batch_id, report_id FROM app.approval_batch_item
+      WHERE batch_id = p_batch_id AND status = 'queued'
+      ORDER BY report_id LIMIT p_limit
+      FOR UPDATE SKIP LOCKED
+   )
+  RETURNING report_id;
+END $$;
+```
+
+The client side is deliberately dumb: drive chunks until done, and resume whatever is running on mount (trimmed):
+
+```ts
+const drive = useCallback(async (id: string) => {
+  if (driving.current) return;
+  driving.current = true;
+  try {
+    for (;;) {
+      const res = await processApprovalBatch(id);   // server action: one claimed chunk
+      if ("error" in res) { setError(res.error); break; }
+      setProgress({ done: res.approved + res.failed, total: res.total });
+      if (res.done) break;
+    }
+    setFailures(await fetchBatchFailures(id));
+  } catch {
+    // The batch is intact in the database, so offer Resume instead of failing.
+    setError("Connection lost while approving. Click Resume to continue where it left off.");
+  } finally {
+    driving.current = false;
+  }
+}, []);
+
+useEffect(() => { void resume(); }, [resume]);      // adopt any running batch
+```
+
+The reminder circuit breaker:
+
+```ts
+try {
+  await recordSends(jobRecords);
+} catch {
+  // A broken log can no longer suppress repeats, so sending further jobs this
+  // run would risk re-emailing employees every 5 minutes. Stop here; the next
+  // cron tick retries from a clean state.
+  break;
+}
+```
+
+## Metrics
+
+Facts about the codebase, counted in the repository on 2026-09-19:
+
+- **609 commits** on main, solo-built (one author), with pull requests numbered up to **#100**.
+- **46 design specs** written before the features they describe.
+- **37 migration files** for the app's own schema.
+- **143 test files**, all unit tests run with Playwright's test runner; 78 of them cover the pure domain layer.
+- **4 scheduled crons**, **5 role tiers**.
+- The weekly job renders **58 per-member PDF packs** (the roster size when the feature shipped).
+
+## What I Learned
+
+- **Put the guarantee where it cannot be bypassed.** The once-only rule for reminders is an anti-join inside the RPC and a primary key on the log, not an `if` in the route. The one-approval-per-report rule is a partial unique index. Application code changes; constraints stay.
+- **Name the guarantee honestly.** "Exactly once" was the goal; "at most once per logged send, plus a circuit breaker for when logging fails" is what the design delivers. Writing that down is what surfaced the need for the breaker.
+- **Unattended jobs and humans need different failure behaviour.** A person looking at slightly stale data with a banner is fine. A cron emailing 58 people from stale data is not. The same freshness check returns "show a banner" in one place and "do nothing, retry next hour" in the other.
+- **Long operations belong in the database, not the browser.** Once the batch state was in tables with a claim function, resumability, retry and "two tabs open" all stopped being special cases.
+- **Tests named after the stakeholder's scenarios end arguments quickly.**
+
+## Links
+
+Code is private (employer system). Architecture and decisions are documented here.
