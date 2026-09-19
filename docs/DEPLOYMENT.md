@@ -40,16 +40,17 @@ Set all four for the **Production**, **Preview**, and **Development** environmen
 4. Before the first deploy, add the four env vars from the table above.
 5. Click **Deploy**. Wait ~2 minutes, then open the `*.vercel.app` URL and confirm the landing page renders and `/projects` case studies load (Mermaid diagrams render client-side, so give them a beat).
 
-## Step 2 — Wire the domain  **[you]**
+## Step 2 — Custom domain (optional)  **[you]**
 
-1. Register `jamilmendez.dev` (Namecheap or Cloudflare Registrar) with your personal email — or pick another domain.
-2. Vercel → Project → **Settings → Domains → Add → `jamilmendez.dev`**.
-3. Add the A / CNAME records Vercel shows you at your registrar. Propagation takes 5–60 min.
-4. **If you chose a domain other than `jamilmendez.dev`**, update the hardcoded URL in these files, then commit + push  **[claude can do this]**:
-   - `app/layout.tsx` (`metadataBase`)
-   - `app/sitemap.ts`
-   - `app/robots.ts`
-   - `README.md` (the `Production:` line)
+The site runs at `https://jamil-mendez.vercel.app`. That origin is the default of the single
+`SITE_URL` constant in `lib/site-data.ts`, which drives `metadataBase`, canonical URLs, the
+sitemap, robots and the OG images.
+
+To move to a custom domain:
+
+1. Register the domain and add it in Vercel → Project → **Settings → Domains**.
+2. Add the A / CNAME records Vercel shows you at your registrar.
+3. Set `NEXT_PUBLIC_SITE_URL=https://your-domain` in Vercel (Production) and redeploy. No code change is needed.
 
 ## Step 3 — Verify  **[you + claude]**
 
