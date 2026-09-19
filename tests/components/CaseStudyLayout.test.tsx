@@ -22,8 +22,36 @@ describe("CaseStudyLayout", () => {
     expect(repo).toHaveAttribute("target", "_blank");
   });
 
-  it("shows no repo link when the code is private", () => {
-    render(<CaseStudyLayout project={{ ...base, code: "private" }}>body</CaseStudyLayout>);
-    expect(screen.queryByRole("link", { name: /view repository/i })).toBeNull();
+  it("shows the private-code note and no repo link when the code is private", () => {
+    render(
+      <CaseStudyLayout project={{ ...base, code: "private", publicRepoUrl: undefined }}>
+        body
+      </CaseStudyLayout>,
+    );
+    expect(screen.queryByRole("link", { name: /repository/i })).toBeNull();
+    expect(screen.getByText(/code is private \(employer system\)/i)).toBeInTheDocument();
+  });
+
+  it("uses a custom repo label when one is set", () => {
+    render(
+      <CaseStudyLayout project={{ ...base, repoLabel: "Public reference build" }}>body</CaseStudyLayout>,
+    );
+    expect(screen.getByRole("link", { name: /public reference build/i })).toHaveAttribute(
+      "href",
+      base.publicRepoUrl,
+    );
+  });
+
+  it("renders screenshots only when the project lists them", () => {
+    const { rerender } = render(<CaseStudyLayout project={base}>body</CaseStudyLayout>);
+    expect(screen.queryByRole("img")).toBeNull();
+    rerender(
+      <CaseStudyLayout
+        project={{ ...base, screenshots: [{ src: "/projects/x/a.png", alt: "Queue page" }] }}
+      >
+        body
+      </CaseStudyLayout>,
+    );
+    expect(screen.getByRole("img", { name: "Queue page" })).toHaveAttribute("src", "/projects/x/a.png");
   });
 });

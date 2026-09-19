@@ -52,8 +52,8 @@ export default function About() {
               hand, and internal tools for other departments, like a quoting web app that
               took accounting from 20-30 quotes a day to over 100. On the AI side I run an
               email-driven agent that diagnoses failed pipeline runs and asks for approval
-              before it changes anything, and I am building DARA, a natural-language
-              reporting agent over the warehouse.
+              before it changes anything, and I have a working prototype of DARA, a
+              natural-language reporting agent over the warehouse.
             </p>
 
             <h2>How I work</h2>

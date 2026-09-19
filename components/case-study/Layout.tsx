@@ -1,6 +1,7 @@
 import "@/app/home.css";
-import type { ProjectMeta } from "@/lib/projects";
+import { PRIVATE_CODE_NOTE, isLive, statusLabel, type ProjectMeta } from "@/lib/projects";
 import { SiteHeader } from "@/components/home/SiteHeader";
+import { SiteFooter } from "@/components/home/SiteFooter";
 import { TagPills } from "./TagPills";
 
 export function CaseStudyLayout({
@@ -10,6 +11,9 @@ export function CaseStudyLayout({
   project: ProjectMeta;
   children: React.ReactNode;
 }) {
+  const hasRepo = project.code === "public" && Boolean(project.publicRepoUrl);
+  const shots = project.screenshots ?? [];
+
   return (
     <div className="home-shell">
       <SiteHeader />
@@ -17,13 +21,8 @@ export function CaseStudyLayout({
         <section className="cs-head">
           <div className="cs-wrap">
             <div className="eyebrow">
-              Case study ·{" "}
-              {project.prod === "production" ? "In production" : "Prototype"} ·{" "}
-              {project.code === "public"
-                ? "public repo"
-                : project.code === "private"
-                  ? "private repo"
-                  : "OSS coming"}
+              {isLive(project) && <span className="dot" />}
+              Case study · {statusLabel(project)} · {hasRepo ? "public code" : "private code"}
             </div>
             <h1>{project.name}</h1>
             <p className="tagline">{project.tagline}</p>
@@ -32,7 +31,7 @@ export function CaseStudyLayout({
                 <span key={s}>{s}</span>
               ))}
             </div>
-            {project.code === "public" && (
+            {hasRepo ? (
               <div className="cs-repo">
                 <a
                   className="link-u"
@@ -40,34 +39,35 @@ export function CaseStudyLayout({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  View repository ↗
+                  {project.repoLabel ?? "View repository"} ↗
                 </a>
               </div>
-            )}
-            {project.code === "coming" && (
-              <div className="cs-status">
-                Open-source reference implementation coming {project.etaWeek ?? "soon"}
-              </div>
+            ) : (
+              <div className="cs-status">{project.privateNote ?? PRIVATE_CODE_NOTE}</div>
             )}
             <TagPills tags={project.tags} />
           </div>
         </section>
+
+        {shots.length > 0 && (
+          <section className="cs-wrap cs-shots" aria-label="Screenshots">
+            {shots.map((shot) => (
+              <figure key={shot.src}>
+                {/* Plain img: screenshots are static files with unknown dimensions. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={shot.src} alt={shot.alt} loading="lazy" />
+                {shot.caption && <figcaption>{shot.caption}</figcaption>}
+              </figure>
+            ))}
+          </section>
+        )}
 
         <article className="cs-wrap">
           <div className="cs-prose">{children}</div>
         </article>
       </main>
 
-      <footer>
-        <div className="wrap foot">
-          <span>© 2026 Jamil Mendez</span>
-          <span>
-            <a href="/#work">Work</a>
-            <a href="/projects">All projects</a>
-            <a href="/">Home</a>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

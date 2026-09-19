@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ALL_TAGS } from "@/lib/tags";
-import type { ProjectMeta } from "@/lib/projects";
+import { isLive, statusLabel, type ProjectMeta } from "@/lib/projects";
 
 function readActiveFromHash(): string[] {
   if (typeof window === "undefined") return [];
@@ -90,8 +90,9 @@ export function TagFilter({ projects }: { projects: ProjectMeta[] }) {
                 ))}
               </div>
             </div>
-            <span className={`pr-st${p.prod === "production" ? " live" : ""}`}>
-              {p.prod === "production" ? "● In production" : "Prototype"}
+            <span className={`pr-st${isLive(p) ? " live" : ""}`}>
+              {isLive(p) ? "● " : ""}
+              {statusLabel(p)}
             </span>
           </Link>
         ))}

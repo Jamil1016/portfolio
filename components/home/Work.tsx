@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { projects, type ProjectMeta } from "@/lib/projects";
+import { projects, isLive, statusLabel, type ProjectMeta } from "@/lib/projects";
 
 function statusNode(p: ProjectMeta) {
-  return p.prod === "production" ? (
-    <span className="live">● In production</span>
+  return isLive(p) ? (
+    <span className="live">● {statusLabel(p)}</span>
   ) : (
-    <span>Prototype</span>
+    <span>{statusLabel(p)}</span>
   );
 }
 
@@ -33,12 +33,12 @@ export function Work() {
         <div className="work-grid">
           <Link className="card featured" href={`/projects/${featured.slug}`}>
             <div className="status">
-              <span>01 · Flagship</span>
+              <span>01 · Featured</span>
               {statusNode(featured)}
             </div>
             <h3>{featured.name}</h3>
             <p>{featured.tagline}</p>
-            <div className="metric">12.2M+ rows · 111 tables · ~14 pipelines</div>
+            {featured.metric && <div className="metric">{featured.metric}</div>}
             <Chips tags={featured.tags} />
           </Link>
 
@@ -62,8 +62,9 @@ export function Work() {
             <Link className="ledger-row" href={`/projects/${p.slug}`} key={p.slug}>
               <span className="name">{p.name}</span>
               <span className="desc">{p.tagline}</span>
-              <span className={`st${p.prod === "production" ? " live" : ""}`}>
-                {p.prod === "production" ? "● In production" : "Prototype"}
+              <span className={`st${isLive(p) ? " live" : ""}`}>
+                {isLive(p) ? "● " : ""}
+                {statusLabel(p)}
               </span>
             </Link>
           ))}

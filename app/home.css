@@ -237,6 +237,11 @@ html { scroll-padding-top: 73px; }
 }
 .home-shell .hero-left h1 em { font-style: italic; }
 .home-shell .hero-left .sub { max-width: 470px; font-size: 16.5px; line-height: 1.6; color: var(--dim); margin: 0 0 28px; }
+.home-shell .hero-left .avail {
+  font-family: var(--font-mono), monospace; font-size: 12.5px; line-height: 1.6;
+  color: var(--text); border-left: 2px solid var(--green); padding-left: 12px;
+  max-width: 470px; margin: -8px 0 28px;
+}
 .home-shell .cta-row { display: flex; align-items: center; gap: 26px; margin-bottom: 30px; flex-wrap: wrap; }
 .home-shell .link-u { font-size: 14px; font-weight: 600; color: var(--strong); text-decoration: underline; text-underline-offset: 5px; }
 .home-shell .hero-stackline { font-family: var(--font-mono), monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
@@ -492,6 +497,11 @@ html { scroll-padding-top: 73px; }
 .home-shell .cs-head .cs-repo { margin-bottom: 16px; }
 
 /* centered reading column for the case study (header + prose share it) */
+.home-shell .cs-shots { display: grid; gap: 20px; padding-top: 32px; }
+.home-shell .cs-shots figure { margin: 0; }
+.home-shell .cs-shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); }
+.home-shell .cs-shots figcaption { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--faint); margin-top: 8px; }
+.home-shell .cs-diagram-outline { font-family: var(--font-mono), monospace; font-size: 13px; white-space: pre-wrap; }
 .home-shell .cs-wrap { width: 100%; max-width: 920px; margin: 0 auto; padding: 0 clamp(28px, 4vw, 56px); }
 
 /* MDX prose */

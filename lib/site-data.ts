@@ -1,6 +1,7 @@
 // Real, hand-maintained facts that drive the home page.
 // Source of truth for metrics/stack/experience lives here; projects + tags
 // come from lib/projects.ts and lib/tags.ts.
+import { PRODUCTION_COUNT } from "@/lib/projects";
 
 // Canonical origin for metadata, sitemap, robots and OG images. Override with
 // NEXT_PUBLIC_SITE_URL when a custom domain is wired up.
@@ -31,12 +32,13 @@ export type Stat = {
   label: string;
 };
 
-// Headline proof points (see DESIGN_BRIEF §1).
+// Headline proof points. "systems in production" is derived from
+// lib/projects.ts so the number can never drift from the case studies.
 export const STATS: Stat[] = [
   { value: 12.2, decimals: 1, suffix: "M+", label: "rows across 111 tables" },
-  { value: 14, decimals: 0, suffix: "", label: "active pipelines" },
-  { value: 10, decimals: 0, suffix: "", label: "systems in production" },
-  { value: 2, decimals: 0, suffix: "", label: "LLM agents in production" },
+  { value: 14, decimals: 0, suffix: "", label: "scheduled pipelines, approx." },
+  { value: PRODUCTION_COUNT, decimals: 0, suffix: "", label: "systems in production" },
+  { value: 5, decimals: 0, suffix: "+", label: "years automating manual work" },
 ];
 
 // Each skill is backed by evidence, not a self-rated percentage: a concrete
@@ -53,23 +55,23 @@ export const STACK: SkillColumn[] = [
   {
     title: "Data & Pipelines",
     skills: [
-      { name: "Python", proof: "12.2M rows across 14 pipelines", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
+      { name: "Python", proof: "12.2M+ rows, about 14 scheduled pipelines", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
       { name: "PostgreSQL", proof: "111 tables, materialized views", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
-      { name: "Async ETL (asyncpg)", proof: "12 concurrent GitHub Actions workflows", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
-      { name: "GitHub Actions", proof: "14 scheduled pipelines in production", projectSlug: "date-validator", projectName: "Cross-Source Date Validator" },
-      { name: "Supabase", proof: "backs 10 production systems", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
-      { name: "Data quality & dedup", proof: "per-carrier date reconciliation", projectSlug: "date-validator", projectName: "Cross-Source Date Validator" },
+      { name: "Async ETL (asyncpg)", proof: "binary COPY on a background event loop", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
+      { name: "GitHub Actions", proof: "25 workflows, dispatch chains and watchers", projectSlug: "local-pipeline", projectName: "Async ETL Platform" },
+      { name: "Supabase", proof: "warehouse, auth and RLS behind the internal apps", projectSlug: "workforce-compliance-platform", projectName: "Workforce Platform" },
+      { name: "Data quality & dedup", proof: "cross-source date reconciliation with confidence scores", projectSlug: "date-validator", projectName: "Cross-Source Date Validator" },
     ],
   },
   {
     title: "AI & Orchestration",
     skills: [
-      { name: "Claude API", proof: "2 agents in production", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
-      { name: "Prompt engineering", proof: "eval-gated prompt suite", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
+      { name: "Claude API", proof: "approval-gated agent in production", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
+      { name: "Prompt engineering", proof: "digest spec lives in one system prompt", projectSlug: "daily-claude-digest", projectName: "Daily Claude Digest" },
       { name: "Agent design & tool use", proof: "human-in-the-loop tool approvals", projectSlug: "pipeline-guardian", projectName: "Pipeline Guardian" },
-      { name: "NL → SQL", proof: "chat-first analytics over the warehouse", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
-      { name: "Evals & safety rails", proof: "Postgres RLS + eval harness", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
-      { name: "Next.js + TypeScript", proof: "3 shipped web apps", projectSlug: "portal", projectName: "Ops Portal" },
+      { name: "NL → SQL", proof: "prototype: metric templates before free SQL", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
+      { name: "Safety rails", proof: "SQL guardrail, locked-down RPC, Postgres RLS", projectSlug: "data-analyst-reporting-agent", projectName: "DARA" },
+      { name: "Next.js + TypeScript", proof: "2 internal apps in production", projectSlug: "workforce-compliance-platform", projectName: "Workforce Platform" },
     ],
   },
 ];
@@ -85,8 +87,8 @@ export const EXPERIENCE: ExperienceEntry[] = [
   {
     when: "2025–now",
     current: true,
-    role: "Data & AI Automation Engineer · Nanoninth (Ontel)",
-    what: "Hired as a Data Analyst; in practice I build the platform, solo. Replaced the team's manual pull-and-clean routine across API, Google/Microsoft Drive, Sheets and email with ~14 automated ETL pipelines into a 111-table Supabase warehouse (~12.2M rows), then automated the PDF reports and built dashboards on top. Beyond the data team I ship cross-department tools too. A Quote Automation System took accounting from 20–30 hand-checked quotes a day to 100–200+, while my main build now is DARA (natural-language reporting via Claude + MCP) and AI pipeline monitoring.",
+    role: "Data Analyst (Data & AI Automation) · Nanoninth (Ontel)",
+    what: "Hired as a Data Analyst; the work is data and AI automation engineering, and I build the platform solo. Replaced the team's manual pull-and-clean routine across API, Google/Microsoft Drive, Sheets and email with about 14 scheduled pipelines into a Supabase warehouse (12.2M+ rows across 111 tables), then automated the PDF reports and built dashboards on top. I also ship tools for other departments: a quoting app that took accounting from 20-30 quotes a day to over 100, and a workforce report-compliance platform used for daily-report approvals. On the AI side, an approval-gated agent that diagnoses failed pipeline runs is in production, and DARA (natural-language reporting) is a working prototype.",
   },
   {
     when: "2023–2025",
@@ -111,13 +113,13 @@ export type StudyToProd = { learned: string; title: string; detail: string };
 export const STUDY_TO_PROD: StudyToProd[] = [
   {
     learned: "Evals & safety rails",
-    title: "DARA's eval suite",
-    detail: "Schema-aware NL→SQL that fails safe.",
+    title: "DARA's guardrails",
+    detail: "Schema-aware NL→SQL prototype that fails safe.",
   },
   {
     learned: "Async Python patterns",
     title: "Async ETL platform",
-    detail: "~14 pipelines feeding a 111-table, ~12.2M-row Postgres warehouse.",
+    detail: "About 14 scheduled pipelines feeding 12.2M+ rows across 111 tables.",
   },
   {
     learned: "Agent design & tool use",

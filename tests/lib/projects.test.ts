@@ -1,10 +1,45 @@
 import { describe, it, expect } from "vitest";
-import { projects, getProjectBySlug } from "@/lib/projects";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { projects, getProjectBySlug, PRODUCTION_COUNT } from "@/lib/projects";
+import { STATS } from "@/lib/site-data";
 import { isValidTag } from "@/lib/tags";
 
 describe("projects metadata", () => {
   it("exposes the full project catalog", () => {
-    expect(projects).toHaveLength(13);
+    expect(projects).toHaveLength(16);
+  });
+
+  it("has a case-study file for every project", () => {
+    for (const p of projects) {
+      expect(existsSync(path.join(process.cwd(), "content", "projects", `${p.slug}.mdx`))).toBe(true);
+    }
+  });
+
+  it("only links a repo when the code is public, and never a work-account repo", () => {
+    for (const p of projects) {
+      if (p.code === "public") {
+        expect(p.publicRepoUrl).toMatch(/^https:\/\/github\.com\/Jamil1016\//);
+      } else {
+        expect(p.publicRepoUrl).toBeUndefined();
+      }
+    }
+  });
+
+  it("derives the production count from the catalog", () => {
+    expect(PRODUCTION_COUNT).toBe(projects.filter((p) => p.prod === "production").length);
+    expect(STATS.find((s) => s.label === "systems in production")?.value).toBe(PRODUCTION_COUNT);
+  });
+
+  it("features the strongest proof first", () => {
+    expect(projects.slice(0, 6).map((p) => p.slug)).toEqual([
+      "pipeline-guardian",
+      "data-analyst-reporting-agent",
+      "quote-automation",
+      "workforce-compliance-platform",
+      "event-driven-sync",
+      "local-pipeline",
+    ]);
   });
 
   it("each project has required fields", () => {
@@ -13,8 +48,8 @@ describe("projects metadata", () => {
       expect(p.name).toBeTruthy();
       expect(p.tagline).toBeTruthy();
       expect(p.stack.length).toBeGreaterThan(0);
-      expect(p.prod).toMatch(/^(production|prototype)$/);
-      expect(p.code).toMatch(/^(public|private|coming)$/);
+      expect(p.prod).toMatch(/^(production|pilot|prototype|personal)$/);
+      expect(p.code).toMatch(/^(public|private)$/);
     }
   });
 
