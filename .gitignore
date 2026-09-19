@@ -47,3 +47,6 @@ Thumbs.db
 
 # local design working material (screenshots, mockups)
 /reference
+
+# private cover-letter render (see scripts/build-docs.mjs)
+/documents/cover-letter.pdf

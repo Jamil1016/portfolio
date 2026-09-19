@@ -1,4 +1,6 @@
-// Renders the Markdown documents in /documents to print-ready PDFs in /public.
+// Renders the Markdown documents in /documents to print-ready PDFs.
+// Resume and CV go to /public. The cover letter is a private template: it is
+// rendered next to its source (git-ignored) and is never published.
 // Uses headless Microsoft Edge / Chrome (no npm dependency). Run: node scripts/build-docs.mjs
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -107,7 +109,7 @@ function findBrowser() {
 const DOCS = [
   { src: "documents/resume.md", html: "documents/resume.html", out: "public/resume.pdf", title: "Jamil Mendez - Resume", compact: true },
   { src: "documents/cv.md", html: "documents/cv.html", out: "public/cv.pdf", title: "Jamil Mendez - CV" },
-  { src: "documents/cover-letter.md", html: "documents/cover-letter.html", out: "public/cover-letter.pdf", title: "Jamil Mendez - Cover Letter", letter: true },
+  { src: "documents/cover-letter.md", html: "documents/cover-letter.html", out: "documents/cover-letter.pdf", title: "Jamil Mendez - Cover Letter", letter: true },
 ];
 
 const browser = findBrowser();

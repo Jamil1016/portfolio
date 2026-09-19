@@ -1,12 +1,14 @@
 # Jamil Mendez
 
-**Data & AI Automation Engineer** · Philippines
+**Data & AI Automation Engineer** · Philippines (UTC+8) · remote
 
-jamilmendez1016@gmail.com ·  · github.com/Jamil1016 · jamil-mendez.vercel.app
+jamilmendez1016@gmail.com · github.com/Jamil1016 · jamil-mendez.vercel.app
 
 ## Profile
 
-Data & AI Automation Engineer with an Industrial Engineering foundation and a track record of replacing manual, error-prone processes with systems that run on their own. Over four roles I have moved from front-line operations to QA automation, to demand-planning analytics, to building a full data platform and production AI agents. I am most useful where data is scattered across APIs, spreadsheets, drives, and email, and someone needs it pulled together, trustworthy, and queryable. I care about impact that holds up after I walk away: pipelines that recover from failure, reports that build themselves, and agents that ask before they act.
+Data & AI Automation Engineer with an Industrial Engineering foundation and 5+ years automating manual work: replacing error-prone manual processes with systems that run on their own. Over four roles I have moved from front-line operations to QA automation, to demand-planning analytics, to building a full data platform, internal tools, and LLM agents. I am most useful where data is scattered across APIs, spreadsheets, drives, and email, and someone needs it pulled together, trustworthy, and queryable. I care about impact that holds up after I walk away: pipelines that recover from failure, reports that build themselves, and agents that ask before they act. I build with Claude Code as a pair programmer: I own the design, review every change, and the tests and evals I write decide what ships.
+
+Open to part-time and project work, about 20 hours a week, remote (UTC+8, evenings and weekends).
 
 ## Skills
 
@@ -22,15 +24,17 @@ Data & AI Automation Engineer with an Industrial Engineering foundation and a tr
 
 ## Experience
 
-### Data & AI Automation Engineer · Nanoninth (Ontel)
+### Data Analyst (Data & AI Automation) · Nanoninth (Ontel)
 *2025 – present*
 
-Hired as a Data Analyst; in practice I build and run the data platform solo.
+Hired as a Data Analyst; the work is data and AI automation engineering, and I build and run the data platform solo.
 
-- Replaced a manual pull-and-clean routine spanning third-party APIs, Google and Microsoft Drive, Sheets, and email with roughly 14 automated ETL pipelines feeding a 111-table Supabase (Postgres) warehouse of about 12.2 million rows, with incremental sync and deduplication.
-- Built DARA, a chat-first natural-language reporting tool on Claude and MCP: it answers business questions in plain English, generating SQL against Postgres row-level security and a defined-metric library so numbers stay consistent.
+- Replaced a manual pull-and-clean routine spanning third-party APIs, Google and Microsoft Drive, Sheets, and email with about 14 scheduled pipelines feeding a Supabase (Postgres) warehouse of 12.2M+ rows across 111 tables, with incremental sync and deduplication.
+- Prototyped DARA, a chat-first natural-language reporting tool on the Claude API: it answers business questions in plain English, generating SQL against Postgres row-level security and a defined-metric library so numbers stay consistent. Working prototype, not yet deployed.
+- Built a workforce report-compliance platform (Next.js, Supabase): allowlisted sign-in with five role tiers, daily-report approvals written back to a vendor API as each approver, durable bulk approve, once-only reminder emails, scheduled PDF packs and extracts.
+- Built the second generation of the extractors on Google Cloud: an event listener on Cloud Run, debounced incremental walks, guarded idempotent upserts, an hourly sharded reconcile job, and keyless deploys from GitHub Actions. One job is in production; the listener runs in shadow pending a parity streak.
 - Built Pipeline Guardian, an email-conversational remediation agent that classifies pipeline failures against a knowledge base, auto-fixes the safe cases inside a schema allowlist, and emails me for approval on the rest.
-- Shipped a Quote Automation System for the accounting team: a review queue, batch PDF generation to Drive, and Gmail-draft sending with live presence. It took quoting from 20 to 30 hand-checked quotes a day to 100 to 200 plus.
+- Shipped a Quote Automation System for the accounting team: a review queue, batch PDF generation to Drive, and Gmail-draft sending with live presence. It took quoting from 20-30 quotes a day to over 100.
 - Automated the recurring PDF reports and built the warehouse dashboards so they refresh without manual assembly.
 
 ### Demand Planning Analyst II · Emerson (Copeland)
@@ -59,10 +63,10 @@ QA and compliance in precision manufacturing.
 
 A fuller set, with architecture and code, lives at jamil-mendez.vercel.app.
 
-- **Async ETL Platform.** Roughly 14 multi-pipeline workflows on GitHub Actions loading a 111-table Postgres warehouse, with incremental sync, deduplication, and materialized views.
-- **DARA (Data Analyst Reporting Agent).** Chat-first NL-to-SQL analytics with Postgres row-level security and a defined-metric library, built on Claude and MCP.
+- **Async ETL Platform.** About 14 scheduled pipelines across 25 GitHub Actions workflows loading a Postgres warehouse of 12.2M+ rows across 111 tables, with incremental sync, deduplication, and materialized views.
+- **DARA (Data Analyst Reporting Agent), prototype.** Chat-first NL-to-SQL analytics with Postgres row-level security and a defined-metric library, built on the Claude API.
 - **Pipeline Guardian.** Email-conversational ETL remediation agent: an 18-pattern knowledge base, a three-tier severity router, a SQL schema allowlist for safety, and human approval by email.
-- **Quote Automation System.** Internal quoting tool with a review queue, batch PDF-to-Drive generation, Gmail-draft emailing, and real-time presence; lifted output from 20 to 30 quotes a day to 100 to 200 plus.
+- **Quote Automation System.** Internal quoting tool with a review queue, batch PDF-to-Drive generation, Gmail-draft emailing, and real-time presence; lifted output from 20-30 quotes a day to over 100.
 - **GC Asset Lake.** Lakehouse-lite ETL with incremental API sync and hybrid hot (Postgres) and cold (Parquet plus DuckDB) storage.
 - **RFDS Extractor.** Windows tool that scrapes telecom PDFs from Gmail and parses them deterministically, with an optional Claude fallback, packaged as a single executable.
 
@@ -73,4 +77,4 @@ A fuller set, with architecture and code, lives at jamil-mendez.vercel.app.
 ## Awards & Certifications
 
 - Top Management's Choice Award, Citizen Finedevice (2022)
-- In progress: Claude Certified Architect, Foundations (CCA-F)
+- In progress: Google Cloud Associate Cloud Engineer, then dbt, then Google Cloud Professional Data Engineer
