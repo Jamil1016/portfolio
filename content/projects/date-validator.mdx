@@ -1,33 +1,40 @@
 ## The Problem
 
-Two systems were authoritative for "when did this task complete." The operational platform (Swift) held the asset-task dates; an email-driven status workflow reported a `cop_complete` (and, separately, a 48-hour package) date to the carrier. They drifted constantly, and operators only found the mismatches weeks later when the upstream context was already gone.
+Two systems were authoritative for "when did this task complete." The vendor's project-management platform held the task dates; an email-driven status workflow reported a close-out completion date (and, separately, an interim-package date) to the client. They drifted constantly, and operators only found the mismatches weeks later when the upstream context was already gone.
 
-The fix had to surface only real mismatches (false positives kill adoption), and the matching was the hard part. There's no clean shared key. The carrier's project ID is present on some emails and not others; different carriers report through different cadences; one email can plausibly belong to several site variants. A single natural-key join produced empty or wrong results. The validator had to route per carrier, match through several methods with a confidence signal, and hand operators a diff they could act on without a database query.
+The fix had to surface only real mismatches (false positives kill adoption), and the matching was the hard part. There's no clean shared key. The client's project ID is present on some emails and not others; different client groups report on different cadences; one email can plausibly belong to several site variants. A single natural-key join produced empty or wrong results. The validator had to route per client group, match through several methods with a confidence signal, and hand operators a diff they could act on without a database query.
 
 ## Architecture
 
 <MermaidDiagram>{`
 graph TB
-  AT[(stg_asset_tasks<br/>+ stg_assets)] --> V[analytics view:<br/>multi-method match]
-  EM[(stg_package_emails)] --> V
+  PF[Preflight:<br/>upstream fresh + ordered?] --> V
+  AT[(staged tasks<br/>+ assets)] --> V[analytics view:<br/>multi-method match]
+  EM[(parsed status emails)] --> V
   V --> D{delta vs<br/>snapshot}
-  D -->|cop / 48hr<br/>per carrier| F[flag + confidence<br/>tally]
+  D -->|two task kinds<br/>per client group| F[flag + confidence<br/>tally]
   F --> SH[rolling Google Sheets]
   F --> ML[email: Scrub/Confirm<br/>buttons]
-  ML -->|PATCH| API[Swift API<br/>via Apps Script webapp]
+  ML -->|PATCH| API[Vendor API<br/>via Apps Script webapp]
   D --> SNAP[(snapshot:<br/>refuse-empty guard)]
-  SNAP -.->|Tue–Fri freeze<br/>weekly carriers| D
+  SNAP -.->|Tue-Fri freeze<br/>weekly groups| D
+  SH --> ME[Month-end:<br/>notices, threaded reminders,<br/>completion watcher]
 `}</MermaidDiagram>
 
-A Postgres view does the matching: it joins Final-COP (or 48Hr) asset-tasks against the latest matching package email, deriving a `flag` (`match`, `date_mismatch`, `missing_in_email`, `unparseable_email_date`), a `match_method`, a `disambiguation_score`, and a `confidence`. The Python layer fetches the current task set per kind and carrier, diffs it against a snapshot of what it saw last run, tallies only the delta, and delivers two ways: a rolling Google Sheet, and an email whose action items carry one-click Scrub/Confirm buttons that PATCH the Swift API through an Apps Script web app. A separate month-end subsystem closes each month with per-carrier incomplete emails and an all-complete KPI dashboard.
+A Postgres view does the matching: it joins close-out (or interim-package) tasks against the latest matching status email, deriving a `flag` (`match`, `date_mismatch`, `missing_in_email`, `unparseable_email_date`), a `match_method`, a `disambiguation_score`, and a `confidence`. The Python layer fetches the current task set per kind and client group, diffs it against a snapshot of what it saw last run, tallies only the delta, and delivers two ways: a rolling Google Sheet, and an email whose action items carry one-click Scrub/Confirm buttons that PATCH the vendor API through an Apps Script web app.
+
+The validator is the last link of an evening chain: the email scraper runs, dispatches the task pipeline, which dispatches the validator. A separate month-end subsystem closes each month with per-group incomplete notices, daily reminders threaded under the original notice, and a watcher that sends one all-complete email when the open count reaches zero.
 
 ## Key Decisions
 
-- **Multi-method matching with a confidence signal, not one natural-key join.** Matching runs through `id_match` (the 8-digit FUZE), `name_match` (TMO site name), and `subject_match` (asset name found in the subject), each carrying a `disambiguation_score`. The view emits `confidence` of high/medium/low and `is_best_match` so a reviewer triages weak pairings first instead of trusting a silent join.
-- **Weekly cadence for Carrier A/TMO, daily for Carrier C.** Carrier A/DISH and TMO/USCC roll forward on Mondays only; Carrier C updates daily. `compute_weekly_cadence_snapshot` freezes the weekly carriers Tuesday–Friday and only advances the daily ones, so a weekly carrier's rows don't churn the delta mid-week.
-- **Refuse to truncate the snapshot on zero rows.** `replace_snapshot` does `TRUNCATE + COPY` in one transaction, but if the incoming row set is empty (usually a transient upstream state, like an analytics MV mid-refresh) it refuses to truncate and leaves the prior snapshot intact. An empty truncate was the exact bug that once blanked the comparison baseline.
-- **Weekend skip with Monday rollup.** A `WeekendSkip` preflight exits on Saturday/Sunday ET without writing anything. The snapshot stays at Friday's state, so Monday's run computes a Friday-through-Monday cumulative delta that surfaces everything added over the weekend.
-- **`DISTINCT ON (task_did)` dedup at the source.** `stg_asset_tasks` can land byte-identical duplicate rows upstream; without the guard the duplicate propagates into the snapshot COPY and trips the primary key.
+- **Multi-method matching with a confidence signal, not one natural-key join.** Matching runs through `id_match` (the client's 8-digit project ID), `name_match` (site name), and `subject_match` (asset name found in the subject), each carrying a `disambiguation_score`. The view emits `confidence` of high/medium/low and `is_best_match` so a reviewer triages weak pairings first instead of trusting a silent join.
+- **Weekly cadence for some client groups, daily for others.** Two groups roll forward on Mondays only; the third updates daily. `compute_weekly_cadence_snapshot` freezes the weekly groups Tuesday to Friday and only advances the daily one, so a weekly group's rows don't churn the delta mid-week.
+- **Refuse to truncate the snapshot on zero rows.** `replace_snapshot` does `TRUNCATE + COPY` in one transaction, but if the incoming row set is empty (usually a transient upstream state, like a materialized view mid-refresh) it refuses to truncate and leaves the prior snapshot intact. An empty truncate was the exact bug that once blanked the comparison baseline.
+- **Preflight freshness check before the evening run.** Before comparing anything, `preflight()` runs four gates: skip weekends (and skip if both task kinds already ran and emailed today, which lets a partial failure retry); require today's task extract to have succeeded; require today's email scrape to have finished; and require the task extract to be newer than the latest scrape. The last gate raises `UpstreamStale` and catches the race of reconciling today's emails against yesterday's task snapshot.
+- **Month-end completion watcher with a state-guarded single send.** One state row per closing month. The weekday watcher does nothing unless an incomplete notice was sent and the all-complete email was not. It recounts open items from the Sheet, refuses to act when the count is zero but the month was never armed (a partial Sheet read must not look like completion), sends the all-complete email once, then stamps the sent time. A workflow concurrency group prevents overlapping runs.
+- **Threaded daily reminders.** Gmail replaces a self-assigned `Message-ID` at send time, so after sending a month-end notice the code reads the real `Message-ID` header back through the Gmail API and stores it per month, client group and recipient. Each daily reminder goes out with `In-Reply-To` and `References` set to that stored id, so it lands under the original notice instead of starting a new thread. Each group stops independently and gets a closing reply.
+- **Weekend skip with Monday rollup.** The snapshot stays at Friday's state over the weekend, so Monday's run computes a Friday-through-Monday cumulative delta that surfaces everything added in between.
+- **`DISTINCT ON (task_id)` dedup at the source.** The staged task table can land byte-identical duplicate rows upstream; without the guard the duplicate propagates into the snapshot COPY and trips the primary key.
 
 ## Code Samples
 
@@ -65,30 +72,34 @@ async with pool.acquire() as conn:
         await conn.copy_records_to_table(cfg["snapshot_table"], ...)
 ```
 
-Weekly carriers frozen Tue–Fri, daily carriers advanced, deduped before they hit the snapshot PK:
+Threading a reminder under the original notice (simplified):
 
 ```python
-weekly_rows = [r for r in prev_snapshot if is_weekly_carrier(r.carrier_group)]
-daily_rows  = [r for r in current_set   if not is_weekly_carrier(r.carrier_group)]
-# Weekly precedence: a task frozen on Monday must not also advance as "daily"
-weekly_dids = {r.task_did for r in weekly_rows}
-daily_rows  = [r for r in daily_rows if r.task_did not in weekly_dids]
-return weekly_rows + daily_rows
+# Gmail rewrites Message-ID on send, so read the real one back.
+sent = service.users().messages().send(userId="me", body={"raw": raw}).execute()
+real_id = fetch_message_id(service, sent["id"])      # metadata-only GET
+save_notice_state(month, group, recipient, message_id=real_id, thread_id=sent["threadId"])
+
+# Later, each daily reminder:
+msg["In-Reply-To"] = state.message_id
+msg["References"] = state.message_id
+body = {"raw": encode(msg), "threadId": state.thread_id}
 ```
 
 ## Metrics
 
-- **Two task kinds × three carrier buckets:** COP + 48Hr across Carrier C / Carrier A+DISH / TMO+USCC, with per-carrier routing and cadence.
-- **`try_parse_cop_date` handles 176 distinct date patterns** observed in the email corpus; anything else returns NULL and is flagged `unparseable_email_date` rather than guessed.
-- **48Hr corpus = 2,031 emails, all Carrier C** (verified 2026-05-06), which is why Carrier A/TMO are dropped from 48Hr processing entirely, so they never generate `missing_in_email` noise.
-- **34 migrations** evolving the matching view, and **18 test modules** covering the parser, flag logic, delta detection, preflight, and snapshot-guard scenarios.
+- **Two task kinds across three client groups**, with per-group routing and cadence.
+- **The email date parser handles 176 distinct date patterns** observed in the email corpus; anything else returns NULL and is flagged `unparseable_email_date` rather than guessed.
+- **One task kind only exists for one client group** (2,031 emails checked), so the other groups are dropped from that kind entirely and never generate `missing_in_email` noise.
+- **37 migrations** evolving the matching view and month-end state, and **19 test modules** covering the parser, flag logic, delta detection, preflight, snapshot guard and month-end scenarios.
 
 ## What I Learned
 
 - **Data-quality bugs live in the match key, not the SQL.** The instinct is "the join is wrong." Almost always the join is fine and the inputs don't share a clean key. Routing through several match methods with an explicit confidence score beat any attempt to force one universal key.
 - **Guard the destructive operation against the empty case.** A `TRUNCATE + COPY` is correct until the COPY has nothing to write. Refusing to empty on zero rows is one cheap conditional that prevented the worst failure mode: a silently blanked baseline.
-- **Cadence is a first-class concern.** Carriers don't report on the same rhythm. Encoding weekly-vs-daily and a weekend rollup into the snapshot logic kept the daily delta honest instead of drowning operators in churn.
+- **Cadence and ordering are first-class concerns.** Client groups don't report on the same rhythm, and a chained run can still race its own upstream. Encoding weekly-vs-daily, a weekend rollup and an ordering gate into the run kept the daily delta honest.
+- **Say what the guarantee is.** The all-complete email is a check-then-send-then-stamp: if the stamp failed after the send, it could repeat the next day. That is an acceptable trade for this email, and it is documented as such rather than called exactly-once.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/date-validator), private (work org). Open-source reference write-up lands W11 of the AI Engineer learning path.
+Code is private (employer system). Architecture and decisions are documented here.

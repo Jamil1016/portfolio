@@ -1,6 +1,10 @@
+## The Result
+
+Accounting went **from 20-30 quotes a day to over 100**. The quotes were hand-checked and hand-built before; now they are reviewed in a queue and generated and staged in bulk.
+
 ## The Problem
 
-Producing the company's quotes was a manual chain: pull the worklist of asset tasks, match each invoice line to the right asset metadata (parse a Site ID into subcon / GC / carrier / market / project / fuze ID), pick the correct priced service rate when several apply, build a branded A4 PDF by hand, and email it to the right recipients looked up by hand. Across a few hundred tasks at a time, it was slow, inconsistent, and easy to get wrong on either the pricing or the recipient.
+Producing the company's quotes was a manual chain: pull the worklist of tasks, match each invoice line to the right asset metadata (parse a site ID into contractor / client / market / project / client project ID), pick the correct priced service rate when several apply, build a branded A4 PDF by hand, and email it to the right recipients looked up by hand. Across a few hundred tasks at a time, it was slow, inconsistent, and easy to get wrong on either the pricing or the recipient.
 
 This app turns that chain into a reviewed, batched workflow: a queue reads the worklist and invoice options straight from the data platform, the operator overrides and verifies categories, then PDFs are generated to Drive and emails staged as Gmail drafts, in bulk, with a live view of who else is working alongside you.
 
@@ -14,7 +18,7 @@ graph TD
     AT[stg_asset_tasks<br/>synced upstream] --> VR[v_quote_review<br/>analytics view]
     IF[stg_invoicing_form<br/>synced upstream] --> VR
     OV[app_quote.overrides<br/>app-written] --> VR
-    DIR[ref_quote_directory] --> VR
+    DIR[recipient directory] --> VR
   end
   VR --> Q[Queue page<br/>review + verify]
   Q --> GEN[Bulk PDF API<br/>react-pdf to Drive]
@@ -24,7 +28,7 @@ graph TD
   PR[Supabase Realtime<br/>presence] -.live roster.-> Q
 `}</MermaidDiagram>
 
-The Queue page calls `getQuoteData()`, which merges the `v_quote_review` analytics view (source data + parsed enrichment + operator overrides + directory matches), the invoice-option choices, generated-PDF state, and email history, filtering out anything already sent. The operator overrides fields (GC, carrier, market, project, service rate) and verifies a row. `/api/quote-pdf/bulk` renders the same `<QuoteDocument>` used for on-screen preview to a buffer via `@react-pdf` on the Node runtime, uploads concurrently to a Drive folder, and streams NDJSON progress. `/api/email-queue/schedule` renders TipTap email templates to Gmail MIME and creates **drafts** (not sends) in each user's OAuth'd account. A Supabase Realtime presence channel shows who's in the app and on which page.
+The Queue page calls `getQuoteData()`, which merges the `v_quote_review` analytics view (source data + parsed enrichment + operator overrides + directory matches), the invoice-option choices, generated-PDF state, and email history, filtering out anything already sent. The operator overrides fields (contractor, client, market, project, service rate) and verifies a row. `/api/quote-pdf/bulk` renders the same `<QuoteDocument>` used for on-screen preview to a buffer via `@react-pdf` on the Node runtime, uploads concurrently to a Drive folder, and streams NDJSON progress. `/api/email-queue/schedule` renders TipTap email templates to Gmail MIME and creates **drafts** (not sends) in each user's OAuth'd account. A Supabase Realtime presence channel shows who's in the app and on which page.
 
 ## Key Decisions
 
@@ -33,6 +37,9 @@ The Queue page calls `getQuoteData()`, which merges the `v_quote_review` analyti
 - **Server-side PDF via `@react-pdf`, no headless browser.** The same component renders both the live preview and the server-side PDF to a buffer, uploaded straight to Drive. Serverless-friendly and deterministic.
 - **Gmail drafts, not direct sends.** The app stages drafts in the user's account; the human stays in control of the actual send. It's auditable and avoids bounce/spam pitfalls.
 - **Validate before any I/O.** Bulk generation blocks rows with no price or no match (HTTP 422) before rendering or uploading a single PDF: fail early, run the good ones in parallel.
+- **Gmail token health, because a revoked token fails silently.** An error counts as terminal only when it is an auth error with status 400/401 and code `invalid_grant`; timeouts and aborts stay retryable. On a terminal error the connection is flipped to `error` with an update guarded on `status = 'active'`, so only the first transition returns true and the admin alert goes out once, through any other still-active Gmail connection, off the response path. A banner in the app is the durable signal. A daily probe rides on the end of each email-queue run: it picks at most one active connection not checked in the last 24 hours, stalest first, refreshes its token and stamps the result. It never throws into the dispatcher.
+- **Resolve the filing requirement per task, by name.** Generated quotes are filed back to the vendor's project-management API. The vendor creates one file-requirement instance per asset from a per-project template, so the id cannot be derived or hardcoded. The app does one GET of the task's requirements, searches the JSON recursively for the requirement by name, and uses the resolved id for the upload, for the approve check (which confirms a file is attached and never approves an empty requirement) and for the manual-upload deep link. New projects work with no code change.
+- **Directory upsert on a normalized key.** The recipient directory is keyed on contractor, client, market and project. Saving without an id compares a normalized key in application code (the same normalization the review view groups by, so spelling variants with hyphens or slashes collapse together), updates every existing row on that key, and inserts only when the key is new. This is an application-level select-then-write, not a database unique constraint; it exists because stacked duplicates that later diverge made the view report a conflict and show no recipient.
 - **Real-time presence for team coordination.** A `usePresence()` hook broadcasts user + page + idle status on a Supabase Realtime channel so the team can see who's working where and avoid duplicate effort.
 
 ## Code Samples
@@ -46,8 +53,9 @@ export async function setOverride(taskDid: string, field: string, value: string 
   const ex = (await existingRow(svc, taskDid)) as Record<string, unknown>;
   const merged = {
     task_did: taskDid,
-    subcon: ex.subcon ?? null, gc: ex.gc ?? null, carrier: ex.carrier ?? null,
-    market: ex.market ?? null, project: ex.project ?? null, fuze_id: ex.fuze_id ?? null,
+    contractor: ex.contractor ?? null, client: ex.client ?? null,
+    market: ex.market ?? null, project: ex.project ?? null,
+    client_project_id: ex.client_project_id ?? null,
     verified: ex.verified ?? false,
     [field]: value, updated_by: email, updated_at: new Date().toISOString(),
   };
@@ -86,10 +94,10 @@ const stream = new ReadableStream<Uint8Array>({
 
 These are verifiable facts about the system, not measured outcomes:
 
-- **8 pages** and **6 API routes**; **44 React components** and **40 lib modules**
-- **219 commits** in active development since early June 2026
-- **24 unit/integration test files** (email MIME, templating, safety, token crypto, send identities, auth allowlist, …) plus Playwright configured
-- Persistence across **7 `app_quote` tables** (the app's own schema, renamed from `data_staging`), with source reads from upstream `data_staging` tables and **5 analytics views/materialized views**, plus the `ref_quote_directory` reference table
+- **8 pages** and **7 API routes**; **46 React component files**
+- **250 commits** in active development since early June 2026
+- **33 unit/integration test files** (email MIME, templating, safety, token crypto, send identities, auth allowlist, …) plus Playwright configured
+- Persistence across **7 `app_quote` tables** (the app's own schema, renamed from `data_staging`), with source reads from upstream `data_staging` tables and **5 analytics views/materialized views**, plus the the recipient directory table reference table
 - Bulk PDF generation runs at **concurrency 4**, streaming NDJSON progress; emails staged as Gmail **drafts**
 - Real-time presence over a Supabase Realtime channel (`quote-app-presence`), de-duplicated per user across tabs
 - Operates over a worklist of **~322 tasks** at the time of writing
@@ -102,4 +110,4 @@ These are verifiable facts about the system, not measured outcomes:
 
 ## Links
 
-Part of the `ai-projects` monorepo. A mature internal tool, in production. Data is read from the Supabase data platform (synced upstream); there is no separate external quotation API.
+[Public reference repository](https://github.com/Jamil1016/quote-automation). The production system runs in a private employer repository, deployed on Vercel. Data is read from the Supabase data platform (synced upstream); there is no separate external quotation API.

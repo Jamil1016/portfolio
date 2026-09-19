@@ -2,7 +2,7 @@
 
 A business team needed recurring finance and compliance reports delivered automatically, visually rich (real charts, not just tables), gated to the right days, and reliable enough to run for months without a human babysitting them. A missed report meant a manual scramble to reconstruct numbers.
 
-It grew into a four-report suite in one monorepo: a **daily finance report** (built every weekday but emailed only Mon/Wed/Fri), a **weekly compliance audit** (Fridays), an **open-items report** (event-driven, split per carrier with Excel + PDF delivered to per-carrier Google Drive folders), and a **final-cop-pending** prototype. Reliability was the constraint. Each report is triggered by something more dependable than a bare cron timer, and re-running one produces an identical artifact.
+It grew into a suite of seven reports in one monorepo. Four are live: a **daily finance report** (built every weekday but emailed only Mon/Wed/Fri), a **weekly compliance audit** (Fridays), an **open-items report** (event-driven, split per client group with Excel + PDF delivered to per-group Google Drive folders), and a **weekly invoicing workbook delivered to a Google Chat space**. Three are not live yet: an **email-triggered weekly PDF-per-market report** that is built and in its proving period, a forecast-vs-actuals report in test, and a pending-closeout prototype. Reliability was the constraint. Each report is triggered by something more dependable than a bare cron timer, and re-running one produces an identical artifact.
 
 ## Architecture
 
@@ -16,21 +16,32 @@ graph LR
   B --> C[Chart.js 4.4 in HTML<br/>render via Playwright Chromium]
   C --> PDF[PDF]
   PDF --> GM[Gmail API send]
-  PDF --> DR[Google Drive<br/>per-carrier folders<br/>open-items only]
+  PDF --> DR[Google Drive<br/>per-group folders<br/>open-items only]
 `}</MermaidDiagram>
 
-A Google Apps Script time-trigger fires and posts a `repository_dispatch` to GitHub (the open-items report is instead chained off the upstream `local-pipeline` data refresh, so its email never goes out with stale data). The receiving workflow applies a weekend check and, for daily finance, a Mon/Wed/Fri day-of-week gate, both evaluated in Eastern time so they behave the same whether the trigger fired the workflow or someone ran it manually. On a sending day the Python generator queries read-only Supabase analytics views (asyncpg + psycopg2), renders Chart.js 4.4 charts inside an HTML page that Playwright headless Chromium prints to PDF, and ships via the Gmail API. Open-items additionally writes per-carrier Excel + PDF to dated Drive sub-folders and shares the folder links in the email body.
+A Google Apps Script time-trigger fires and posts a `repository_dispatch` to GitHub (the open-items report is instead chained off the upstream `local-pipeline` data refresh, so its email never goes out with stale data). The receiving workflow applies a weekend check and, for daily finance, a Mon/Wed/Fri day-of-week gate, both evaluated in Eastern time so they behave the same whether the trigger fired the workflow or someone ran it manually. On a sending day the Python generator queries read-only Supabase analytics views (asyncpg + psycopg2), renders Chart.js 4.4 charts inside an HTML page that Playwright headless Chromium prints to PDF, and ships via the Gmail API. Open-items additionally writes per-group Excel + PDF to dated Drive sub-folders and shares the folder links in the email body.
 
 ## The reports
 
 The reports share the trigger → render → deliver stack but differ in cadence, data, and output:
 
-| Report | Trigger | Cadence | Output |
-|---|---|---|---|
-| Daily finance | Apps Script time-trigger | Built weekdays; emailed Mon/Wed/Fri | HTML + PDF via Gmail |
-| Weekly compliance audit | Apps Script time-trigger | Fridays | PDF via Gmail |
-| Open-items | Upstream pipeline completion (event-driven) | Per data refresh | Per-carrier (VZW/ATT/TMO) Excel + PDF to Google Drive folders |
-| Final-COP-pending | n/a | prototype | n/a |
+| Report | Trigger | Cadence | Output | Status |
+|---|---|---|---|---|
+| Daily finance | Apps Script time trigger | Built weekdays; emailed Mon/Wed/Fri | HTML + PDF via Gmail | Live |
+| Weekly compliance audit | Apps Script time trigger | Fridays | PDF via Gmail | Live |
+| Open items | Upstream pipeline completion | Mon and Fri | Per-client-group Excel + PDF to Google Drive folders | Live |
+| Weekly invoicing workbook | Upstream pipeline completion, Mondays only | Weekly | Two-sheet Excel workbook posted to a Google Chat space | Live |
+| Weekly completion report per market | An inbound email from a market lead | Weekly, per market | One-page PDF per market, archived to Drive and emailed | Built, proving period |
+| Forecast vs actuals | n/a | n/a | n/a | Test, go-live pending |
+| Pending closeout | n/a | n/a | n/a | Prototype |
+
+### The Google Chat-delivered weekly report
+
+This replaced an analyst's manual Monday post. It builds a two-sheet Excel workbook that reproduces the columns of her earlier spreadsheet export (with a placeholder row when a sheet is empty, so the file is never confusingly blank) and posts it to a Google Chat space through the Chat REST API over OAuth, with the usual greeting. It is dispatched from the end of the task pipeline's run, on Mondays only, so it fires when the data is fresh rather than at a fixed time. The workflow has a test/production target switch and a dry-run option.
+
+### The email-triggered weekly PDF-per-market report
+
+Market leads email two Excel files with a subject convention (tracker name, market code, date). An Apps Script mailbox watcher matches the subject tolerantly, replies with the expected convention when the format is wrong, and fires `repository_dispatch`. The pipeline loads the files into raw, staging and reference tables with full history, takes the reported week from a column inside the data rather than from the subject line, and flags anomalies (the two files disagreeing, an unknown market registering itself). It renders a one-page PDF with seven visuals per market, archives it to Drive, and emails it. It is built and tested but still in its proving period: until the leads trigger it unprompted, output goes to me only.
 
 ## Key Decisions
 
@@ -93,8 +104,8 @@ def _connect_with_retry(url, attempts=3, backoff=2.0):
 
 - **Delivery latency:** ~5–15 minutes trigger-to-inbox, dominated by Apps Script poll interval + GHA cold start + Playwright Chromium on a cache miss.
 - **Daily finance run:** ~4 minutes end to end.
-- **Suite:** 4 subprojects; open-items split across 3 carriers (VZW / ATT / TMO) into per-carrier Drive folders.
-- **Tests:** ~12 unit tests plus golden snapshots (smoke + freshness-guard boundaries, email body, subject lines).
+- **Suite:** 7 reports (4 live, 1 in its proving period, 1 in test, 1 prototype); open-items split across three client groups into per-group Drive folders.
+- **Tests:** 33 test files, most of them on the newest report's inbox parsing, loading and validation.
 
 ## What I Learned
 
@@ -104,4 +115,4 @@ def _connect_with_retry(url, attempts=3, backoff=2.0):
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/report-automation). Open-source reference implementation lands W5 of the AI Engineer learning path.
+[Public reference repository](https://github.com/Jamil1016/report-automation). The production system runs in a private employer repository.

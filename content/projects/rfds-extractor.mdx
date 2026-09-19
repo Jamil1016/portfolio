@@ -1,18 +1,18 @@
 ## The Problem
 
-RFDS (Radio Frequency Data Sheet) PDFs arrive in a Gmail inbox from multiple telecom carriers (Carrier A, Carrier C, Carrier B, and others), each carrying ~30 structured fields per site (WOID, site ID, GPS, finance region, structure type, …). The existing process was a person opening each attachment and copy-pasting fields into a spreadsheet, every month, across hundreds of documents. It's slow, error-prone, and the layouts differ by carrier.
+RFDS (Radio Frequency Data Sheet) PDFs arrive in a Gmail inbox from several major US carriers, each carrying ~30 structured fields per site (work-order ID, site ID, GPS, finance region, structure type, …). The existing process was a person opening each attachment and copy-pasting fields into a spreadsheet, every month, across hundreds of documents. It's slow, error-prone, and the layouts differ by carrier.
 
 The tool automates the whole loop: pull RFDS attachments from Gmail, detect which carrier template a PDF is, parse it deterministically, and write monthly per-carrier Excel workbooks an operator can hand straight to reporting. Crucially, it ships as one Windows `.exe` so a non-technical operator runs it with no Python install.
 
 ## Architecture
 
-Gmail I/O and PDF parsing have opposite bottlenecks. One is network-bound, the other CPU-bound, so they run on different pools. Deterministic parsing is the default path; Claude is a gated fallback only for Carrier A PDFs the parser can't read.
+Gmail I/O and PDF parsing have opposite bottlenecks. One is network-bound, the other CPU-bound, so they run on different pools. Deterministic parsing is the default path; Claude is a gated fallback only for one carrier's PDFs when the parser can't read them.
 
 <MermaidDiagram>{`
 graph TD
   G[(Gmail / OAuth)] -->|ThreadPool x N| DL[Download RFDS<br/>attachments]
   DL -->|ProcessPool| DT[detect_template<br/>signature strings]
-  DT -->|att_iwm / Carrier C /<br/>t_mobile / cd_revision / vnoc| PR[Per-carrier parser<br/>pdfplumber tables]
+  DT -->|carrier_a / carrier_b /<br/>carrier_c / revision / completion| PR[Per-carrier parser<br/>pdfplumber tables]
   DT -->|unknown| UN[UnknownRow<br/>email metadata only]
   PR -->|parse failed + API key| CF[Claude fallback<br/>claude-haiku-4-5]
   PR --> EW[IncrementalWriter]
@@ -20,7 +20,7 @@ graph TD
   EW --> XL[Monthly workbooks<br/>per-carrier sheets + JSONL]
 `}</MermaidDiagram>
 
-`gmail_client.py` searches and downloads attachments over an OAuth'd Gmail service; a `ThreadPoolExecutor` keeps that network I/O from serializing. Each PDF's bytes go to a `ProcessPoolExecutor`, where `pdf_parser.detect_template()` matches carrier signature strings (a Carrier C footer, a Carrier B URL, a VNOC title, an Carrier A "RFDSDetails" + WOID token) and routes to one of five per-carrier parsers backed by pdfplumber table extraction. If, and only if, an Carrier A parse is marked `failed` *and* `ANTHROPIC_API_KEY` is set, it falls back to a Claude (`claude-haiku-4-5-20251001`) pass. Rows are appended via an `IncrementalWriter` that saves the workbook after every row (and mirrors to JSONL), grouped into monthly files with one worksheet per carrier.
+`gmail_client.py` searches and downloads attachments over an OAuth'd Gmail service; a `ThreadPoolExecutor` keeps that network I/O from serializing. Each PDF's bytes go to a `ProcessPoolExecutor`, where `pdf_parser.detect_template()` matches template signature strings (a footer line, an internal URL, a document title, a field-name token) and routes to one of five per-carrier parsers backed by pdfplumber table extraction. If, and only if, a Carrier A parse is marked `failed` *and* `ANTHROPIC_API_KEY` is set, it falls back to a Claude (`claude-haiku-4-5-20251001`) pass. Rows are appended via an `IncrementalWriter` that saves the workbook after every row (and mirrors to JSONL), grouped into monthly files with one worksheet per carrier.
 
 ## Key Decisions
 
@@ -35,19 +35,21 @@ graph TD
 Template detection works by signature strings that route each PDF to the right carrier parser, with `unknown` as the explicit fallthrough:
 
 ```python
+# Marker strings are placeholders here; the real ones are template-specific
+# footer lines, URLs and titles.
 def detect_template(pdf_bytes: bytes) -> str:
-    """Return one of: 'att_iwm', 'Carrier C', 't_mobile', 'cd_revision', 'vnoc', 'unknown'."""
+    """Return one of: 'carrier_a', 'carrier_b', 'carrier_c', 'revision', 'completion', 'unknown'."""
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         text = "\n".join((p.extract_text() or "") for p in pdf.pages[:2])
-    if "Proprietary and Confidential. Not for disclosure outside of Carrier C" in text:
-        return "Carrier C"
-    if "rfds.internal.Carrier B.com" in text:
-        return "t_mobile"
-    if "VENDOR NOTICE OF COMPLETION" in text:
-        return "vnoc"
-    compact = "".join(text.split())
-    if "RFDSDetails" in compact and ("WOID" in compact or "USID" in compact):
-        return "att_iwm"
+    if TEMPLATE_B_FOOTER in text:            # a fixed footer line
+        return "carrier_b"
+    if TEMPLATE_C_URL in text:               # a URL printed on every page
+        return "carrier_c"
+    if "NOTICE OF COMPLETION" in text:       # a document title
+        return "completion"
+    compact = "".join(text.split())          # table text often loses its spaces
+    if "RFDSDetails" in compact and "SiteID" in compact:
+        return "carrier_a"
     return "unknown"
 ```
 
@@ -55,7 +57,7 @@ The fallback is gated by three conditions: wrong carrier, a successful parse, or
 
 ```python
 if (
-    isinstance(row, AttIwmRow)
+    isinstance(row, CarrierARow)
     and row.parse_method == "failed"
     and claude_fallback.is_available()
 ):
@@ -67,7 +69,7 @@ if (
 These are verifiable facts about the system, not curated outcomes:
 
 - **~2,350 lines** of Python across 16 modules; **908 lines** of tests across 9 test modules with real PDF fixtures
-- **6 document types** (Carrier A IWM, Carrier C, Carrier B, CD Revision, VNOC, Unknown) via 5 per-carrier parsers
+- **6 document types** (three carrier templates, a revision sheet, a completion notice, and Unknown) via 5 per-carrier parsers
 - **9 dependencies** (`pdfplumber`, `openpyxl`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `anthropic`, `tzdata`, `pytest`, `pyinstaller`)
 - **`claude-haiku-4-5-20251001`** as the gated fallback model
 - Ships as a **~56 MB single-file `.exe`** (PyInstaller `--onefile`)
@@ -81,4 +83,4 @@ These are verifiable facts about the system, not curated outcomes:
 
 ## Links
 
-Part of the `ai-projects` monorepo. A working, packaged Windows tool with a full test suite.
+[GitHub repo](https://github.com/Jamil1016/rfds-extractor). A working, packaged Windows tool with a test suite.

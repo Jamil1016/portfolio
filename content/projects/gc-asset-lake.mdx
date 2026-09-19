@@ -10,7 +10,7 @@ Extraction is gated on a watermark; transformed rows fan out to a cold tier (ful
 
 <MermaidDiagram>{`
 graph TD
-  API[(Swift Projects API)] -->|incremental:<br/>changed since watermark| EX[extract.py<br/>ThreadPool x6, 401 reauth]
+  API[(Vendor project-management API)] -->|incremental:<br/>changed since watermark| EX[extract.py<br/>ThreadPool x6, 401 reauth]
   EX --> TR[transform.py<br/>snake_case + dedupe_key]
   TR --> CT[coldtier.py<br/>Parquet, hive-partitioned]
   TR --> HT[hottier.py<br/>Postgres upsert]
@@ -82,4 +82,4 @@ These are verifiable facts about the system, not measured outcomes:
 
 ## Links
 
-Part of the `ai-projects` monorepo. A TDD-built pipeline (168 tests passing); currently in a two-org pilot ahead of full rollout.
+[GitHub repo](https://github.com/Jamil1016/gc-asset-lake). A TDD-built pipeline (168 tests passing); currently in a two-org pilot ahead of full rollout.

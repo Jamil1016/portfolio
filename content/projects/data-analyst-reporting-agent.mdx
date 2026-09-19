@@ -1,3 +1,7 @@
+## Status
+
+**Prototype, in development. Not deployed, no production users.** The agent loop, the SQL guardrail, the locked-down RPC, row-level security (proven with seeded test users) and the metric library work locally. The reports library, admin panel, eval suite and pilot deployment are not built yet. Everything below describes what exists in the code today.
+
 ## The Problem
 
 Operations leaders wanted to ask the warehouse questions in plain English (think "how many people are on leave today" or "task completion rate for the new project this month") and get a trustworthy number back without filing a ticket or learning SQL. The existing dashboards were rigid, and the prior generation of this tool (a FastAPI + Plotly service) generated SQL freely with no real access boundary.
@@ -130,6 +134,6 @@ These are the verifiable facts about the system, not performance claims:
 
 ## Links
 
-**Status:** coming soon. This is the TypeScript/Next.js rewrite that replaces the prior Gen-1 FastAPI + Plotly app: same product surface, an actual database-grounded trust boundary underneath.
+This is the TypeScript/Next.js rewrite of a first-generation FastAPI + Plotly app: same product surface, with a database-grounded trust boundary underneath. The employer-side code is private.
 
-[GitHub repo](https://github.com/Jamil1016/data-analyst-reporting-agent)
+[Public reference build](https://github.com/Jamil1016/cca-capstone): a small public DARA-style reporting agent, built as my Claude Certified Architect capstone. It uses a single-agent loop, typed MCP tools for read-only data access, schema-validated output and a human-escalation policy. It is early and built module by module.

@@ -2,7 +2,7 @@
 
 Keeping up with "all things Claude" (official Anthropic releases, the engineering blog, community signal on Reddit and Hacker News, plus my own usage and yesterday's commits) meant checking a dozen places by hand every morning, or just not keeping up. I wanted one high-signal HTML briefing in my inbox at 1 PM Philippines time: curated, never padded with filler, and never fabricated. The hard part isn't sending an email; it's that the sources are scattered, some are unreliable, and the thing doing the curating has to know when to stay quiet rather than invent content.
 
-So the design makes Claude the curator and a scheduled routine the trigger. The model reads whatever the fetchers managed to pull, selects what matters, and renders a sectioned digest. If a source is down, that section simply doesn't appear.
+So the design makes Claude the curator and a scheduled job the trigger. The model reads whatever the fetchers managed to pull, selects what matters, and renders a sectioned digest. If a source is down, that section simply doesn't appear.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ graph TD
 
 `fetch_sources.py` runs four kinds of fetcher, an HTML scraper, the Reddit API, the HN Algolia API, and an X mirror, across three tiers of sources plus a personal tier (Anthropic Admin API usage stats, `git log` across four repos, and a local work log). Every fetcher returns `[]` on failure instead of raising, so one dead source degrades the digest rather than killing the run. `compose_digest.py` then makes a single `claude-sonnet-4-6` call whose system prompt is the entire digest spec: seven sections, hard rules, and the visual design. It parses the JSON it returns into a subject + HTML body. `send_email.py` sends it via Gmail OAuth.
 
-The scheduler is a [Claude Routine](https://docs.claude.com) (serverless cron + Gmail connector), with a local Python harness (`test_locally.py`) for `--dry-run` / `--send` development.
+It is a personal tool, scheduled via GitHub Actions (a daily cron at 05:00 UTC, 1 PM Philippine time), with a local Python harness (`test_locally.py`) for `--dry-run` / `--send` development.
 
 ## Key Decisions
 
@@ -93,8 +93,8 @@ These are verifiable facts about the system, not measured outcomes:
 
 - **Put the judgment in the prompt, the plumbing in the code.** Encoding the digest structure and the "never fabricate" rules as a system prompt made the whole thing tunable without redeploys. The Python never had to know what a "section" was.
 - **Fail-soft beats correct-or-nothing for a daily artifact.** A briefing that's 80% complete and always arrives is far more useful than one that's perfect when every source happens to be up. Returning `[]` instead of raising was the single most important reliability decision.
-- **A serverless routine is the right host for a once-a-day job.** No laptop, no GitHub Actions minutes, OAuth handled by the connector: the scheduling concern essentially disappears.
+- **A hosted scheduler is the right home for a once-a-day job.** Moving the trigger off my laptop and onto a GitHub Actions cron means the digest arrives whether or not my machine is on.
 
 ## Links
 
-Part of the `ai-projects` monorepo. Built and runs locally end-to-end; designed to deploy as a scheduled Claude Routine.
+[GitHub repo](https://github.com/Jamil1016/daily-claude-digest). A personal tool, scheduled via GitHub Actions. It is not a production system for anyone but me.

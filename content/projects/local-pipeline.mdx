@@ -1,52 +1,86 @@
 ## The Problem
 
-Nightly ingestion of millions of rows from the Swift Projects API (plus Gmail, Google Calendar, and Google Forms) into a Postgres warehouse, feeding analytics views consumed by internal dashboards and an AI assistant. The naive approach, a single Python script pulling everything sequentially, took roughly six hours, regularly timed out, and silently dropped data when the upstream API returned more than ~1,000 rows for a single date range.
+Nightly ingestion of millions of rows from the vendor's project-management API (plus Gmail, Google Calendar, Google Forms and Google Sheets) into a Postgres warehouse, feeding analytics views consumed by internal dashboards, scheduled reports and internal apps. The naive approach, a single Python script pulling everything sequentially, took roughly six hours, regularly timed out, and silently dropped data when the upstream API returned more than ~1,000 rows for a single date range.
 
-Today it's ~14 scheduled pipelines (counted by data source): asset-tasks (the nightly core), orgs/projects, timer, user-priorities, QA forms, daily reports, Gmail revenue (AR-aging + sales), calendar-leave, timer-discrepancies, timer duplicate-resolve, targeted asset-tasks, and the invoicing/quote feed, plus dispatches into the date-validator and gmail-scraper systems. Each must be parallel, idempotent, and observable: one extractor failing can't take down the others, and re-running produces the same result every time.
+Today it's about 14 scheduled pipelines (counted by data source) running across 25 GitHub Actions workflows: the nightly task extract, orgs/projects, timers, user priorities, QA forms, daily reports, revenue emails, calendar events, timer corrections, targeted re-extracts and the invoicing feed, plus watchers, HR roster syncs, and dispatches into the date-validator and email-parser systems. Each must be parallel, idempotent, and observable: one extractor failing can't take down the others, and re-running produces the same result every time.
 
 ## Architecture
 
 <MermaidDiagram>{`
 graph LR
-  AS[Google Apps Script<br/>time triggers] --> GHA[~12 GitHub Actions<br/>pipelines]
+  AS[Google Apps Script<br/>time triggers] --> GHA[25 GitHub Actions<br/>workflows]
   GHA --> EX[Extractors<br/>ThreadPoolExecutor]
-  EX -->|daily chunks| API[Swift API / Gmail<br/>Calendar / Forms]
+  EX -->|daily chunks| API[Vendor API / Gmail<br/>Calendar / Forms / Sheets]
   EX -->|binary COPY| RAW[(data_raw<br/>JSONB)]
   RAW -->|server-side SQL| STG[(data_staging<br/>normalized)]
   STG --> BF[Backfill RPC<br/>derived IDs]
   BF --> AN[(analytics<br/>views + MVs)]
+  GHA --> HW[Health watch<br/>+ drift audit]
+  HW -.->|email on findings| OPS[Operator]
 `}</MermaidDiagram>
 
-The whole fleet was migrated off Windows Task Scheduler (2026-05-28) onto GitHub Actions, fired by Google Apps Script time-driven triggers. The on-prem box was a single point of failure no one could see fail. A single `asyncpg` pool (min=4 / max=20) runs on a dedicated background event-loop thread so synchronous extractor code can submit queries via `run_coroutine_threadsafe()`. A `ThreadPoolExecutor` runs extractors in parallel, streaming rows over asyncpg's binary `COPY` protocol into six schemas: `data_raw` (JSONB) → `data_staging` (normalized) → `analytics` (views + materialized views), plus `reference`, `pipeline`, and `agent`. After extraction, a backfill pass resolves derived foreign keys, then materialized views refresh one at a time.
+The whole fleet was migrated off Windows Task Scheduler (2026-05-28) onto GitHub Actions. Most workflows are fired by Google Apps Script time-driven triggers posting `repository_dispatch` (GitHub's own cron can lag by hours); a smaller set of watchers and syncs use GitHub cron, and some run as event chains off another workflow's completion. A single `asyncpg` pool (min=4 / max=20) runs on a dedicated background event-loop thread so synchronous extractor code can submit queries via `run_coroutine_threadsafe()`. A `ThreadPoolExecutor` runs extractors in parallel, streaming rows over asyncpg's binary `COPY` protocol into six schemas: `data_raw` (JSONB) → `data_staging` (normalized) → `analytics` (views + materialized views), plus `reference`, `pipeline`, and `agent`. After extraction, a backfill pass resolves derived foreign keys, then materialized views refresh one at a time.
 
 ## The pipelines
 
-Each pipeline has its own source and extraction method; they share the warehouse, the `asyncpg`/COPY machinery, and the GitHub Actions + Apps Script trigger layer, which is why this is one platform, not twelve scripts.
+Each pipeline has its own source and extraction method; they share the warehouse, the `asyncpg`/COPY machinery, and the trigger layer, which is why this is one platform, not a folder of scripts.
 
 | Pipeline | Source | What it does |
 |---|---|---|
-| asset-tasks (nightly core) | Swift API | `stg_asset_tasks` ~2.6M rows; per-day chunked to dodge the ~1k truncation cap |
-| orgs / projects | Swift API | Org + project master data |
-| timer | Swift API | Labor timer activities |
-| user-priorities | Swift API | Task-prioritization signals |
+| tasks (nightly core) | Vendor API | The largest dataset; per-day chunked to dodge the ~1k truncation cap |
+| orgs / projects | Vendor API | Org + project master data |
+| timer | Vendor API | Labor timer activities |
+| user priorities | Vendor API | Task-prioritization signals |
 | QA forms | Google Forms | Quality-form submissions |
-| daily reports | Swift API | Daily operational report rows (~674k) |
-| Gmail revenue | Gmail | AR-aging + sales figures parsed from inbound email |
-| calendar-leave | Google Calendar | Leave events, AI-normalized into structured rows |
-| timer-discrepancies | Form → Sheets → DB | Reconciles timer entries against expected values |
-| timer duplicate-resolve | Google Form (on-submit) | Real-time dedup of duplicate timer rows |
-| targeted asset-tasks | Swift API | Report-driven re-extract of a subset |
-| invoicing / quote | Swift API | Invoicing-form + quote data; email dispatcher |
+| daily reports | Vendor API | Daily operational report rows |
+| revenue emails | Gmail | Finance figures parsed from inbound email |
+| calendar events | Google Calendar | Leave and schedule events, parsed into structured rows (deterministic first, AI fallback) |
+| timer corrections | Form → Sheets → DB | Reconciles and de-duplicates timer entries |
+| targeted tasks | Vendor API | Report-driven re-extract of a subset |
+| invoicing | Vendor API | Invoicing-form data; email dispatcher |
+| HR roster | Google Sheets | Employee and schedule-change sync, with a gap watcher |
 
-On completion it also **dispatches** two downstream systems (the date-validator and the gmail-scraper) for ~14 orchestrated pipelines in total.
+## Shadow incremental walker with a drift audit
+
+The nightly task extract is a full reload. To get fresher data without trusting a new code path blindly, an incremental walker runs hourly **in shadow**, writing to separate shadow tables alongside the nightly reload.
+
+The walk goes project → asset list → task lists, and skips as much as it can: a project is skipped when its content watermark has not moved, and task lists are fetched only for assets whose stored last-updated value changed. Writes are guarded upserts, deletions are handled by a keep-list reconcile, and a weekly full-walk sweep catches what an incremental walk cannot see.
+
+The audit compares shadow against current, per project. It does not demand equality. It demands that every difference is explained by one of four allowed classes (for example, ad-hoc tasks the bulk export drops, or bounded lifecycle lag that is tolerated only while the weekly sweep is fresh). One result row per project is written on every run. One run a day is a strict gate that fails the workflow on unexplained drift; daytime runs only record. The walker is still a pilot: the nightly reload remains authoritative. Its successor is the [event-driven sync on Google Cloud](/projects/event-driven-sync).
+
+## Pipeline health watch and auto-rerun
+
+Two separate mechanisms:
+
+- **Health watch (daily, alert-only).** Four checks: failed database cron jobs since the last seen run id; refresh chains whose last success is too old; zero-row checks on key tables and views; and a rebuild function whose max execution time is approaching its statement timeout. A healthy run is silent; any finding sends one plain-text email. After alarming on the execution-time check it resets the statistic, so the alarm re-arms instead of re-sending the same high-water mark every day. A crash of the watcher itself exits non-zero so it shows up red.
+- **Auto-rerun (one pipeline).** A `workflow_run` workflow watches the calendar-events pipeline. If a run failed and it has been attempted fewer than three times, it waits and re-runs only the failed jobs, for at most two automatic reruns. It is deliberately scoped to the one pipeline whose failures are usually transient.
+
+## HR sheet-to-roster sync
+
+HR maintains the roster in Google Sheets. Three workflows keep the warehouse's employee reference in step with it:
+
+- **Employee sync** reads the active-employee sheet, maps headers, diffs against the reference table and writes new hires, updates and resignations as new history rows with an effective date. It is dry-run by default and needs `--apply`. It runs from a daily cron and from a sheet menu; the effective-date input is allow-listed to `YYYY-MM-DD` before it reaches a shell.
+- **Schedule-change sync** parses every tab of the schedule-change sheet. A wipe guard stops a partial read from replacing a full snapshot, and the refresh is upsert-then-prune by run id, so the table is never empty mid-run.
+- **Roster gap watcher** finds people who are submitting reports but have no roster row, infers what it can from warehouse data, appends a row to the HR sheet and runs the employee sync. Cases it cannot fix are flagged. It posts one chat summary per run and stays silent when there is nothing to report.
+
+## AI calendar extraction
+
+Calendar entries are free text typed by people, so the summaries vary. Parsing is layered:
+
+1. A cache lookup on the whitespace-normalized summary.
+2. A deterministic parser that returns a shape with a confidence score.
+3. Only if that confidence is below the gate (0.8) does it call Claude Haiku (`claude-haiku-4-5`) with a single prompt that lists the known leave codes and teams and asks for one JSON object. This is a prompted-JSON call, not tool use or a structured-output feature.
+
+The reply is stripped of code fences, the first JSON object is extracted and parsed, and fields are read defensively with a fixed confidence of 0.75, below the deterministic gate on purpose. Any exception or unparseable reply returns a `needs_review` shape with confidence 0.0; the function never raises, so an API outage cannot fail the pipeline. Results are cached with the model id and prompt version, so a repeated string costs nothing. Known limits: there is no per-run call cap beyond `max_tokens=512`, the allowed values are not enum-checked after parsing, and a `needs_review` result from a transient API failure is cached too until it is cleared.
 
 ## Key Decisions
 
-- **Per-day API chunking.** The Swift API silently truncates a wide date range at ~1,000 rows: no error, just fewer rows. The timer extractor splits each range into one API call per calendar day, which sidesteps the cap entirely. Cost: more API calls. Benefit: zero silent data loss.
+- **Per-day API chunking.** The vendor API silently truncates a wide date range at ~1,000 rows: no error, just fewer rows. The timer extractor splits each range into one API call per calendar day, which sidesteps the cap entirely. Cost: more API calls. Benefit: zero silent data loss.
 - **asyncpg on a background thread, not in-process.** A large synchronous extractor codebase couldn't be rewritten fully async at once. Running one pool on its own event loop and bridging via `run_coroutine_threadsafe()` lets sync callers stay sync while the DB layer is fully async and thread-safe.
 - **Atomic clear+reload via a data-modifying CTE.** The full-refresh tables used to clear in a separate auto-committed `DELETE`, then `INSERT`. When the big `INSERT` later hit `statement_timeout`, the table was already empty, and committed. Folding the clear into the insert as `WITH cleared AS (DELETE ... RETURNING 1) INSERT ...` makes clear-and-reload one statement: a timeout rolls back both, so a table is never left empty.
 - **Six-schema split.** `data_raw` holds unmodified API responses; `data_staging` holds transformed rows; `analytics` holds views and MVs; `reference`, `pipeline`, and `agent` hold lookups, run metadata, and assistant metadata. Every layer is rebuildable from the one beneath it.
-- **Write-once derived IDs.** Once a foreign-key resolution lands on a row it never changes, so it survives clear+reload patterns and prevents cascading rewrites downstream.
+- **Shadow first, then cut over.** New extraction paths run beside the old one and must pass an audit that explains every difference before they are trusted.
+- **The model is the fallback, never the parser.** Deterministic code handles the common case; the LLM only sees what the parser is unsure about, and its failure mode is a review flag.
 
 ## Code Samples
 
@@ -83,40 +117,44 @@ Atomic clear+reload, where a `statement_timeout` can no longer empty the table:
 # A separate DELETE then INSERT can leave the table EMPTY if the INSERT
 # times out after the DELETE commits. The CTE makes it one statement.
 sql = (
-    f"WITH cleared AS (DELETE FROM {SCHEMA_STAGING}.stg_asset_tasks RETURNING 1) "
-    f"INSERT INTO {SCHEMA_STAGING}.stg_asset_tasks (...) "
-    f"SELECT ... FROM {SCHEMA_RAW}.raw_asset_tasks WHERE run_id = $1"
+    f"WITH cleared AS (DELETE FROM {SCHEMA_STAGING}.{table} RETURNING 1) "
+    f"INSERT INTO {SCHEMA_STAGING}.{table} (...) "
+    f"SELECT ... FROM {SCHEMA_RAW}.{raw_table} WHERE run_id = $1"
 )
 db.execute(sql, run_id, statement_timeout=900)
 ```
 
-Connection-level retry with exponential backoff and automatic pool reconnect:
+The AI fallback degrades to a review flag on any failure (lightly simplified):
 
 ```python
-def retry_db(fn, max_retries=5, description="operation"):
-    for attempt in range(max_retries):
-        try:
-            return fn()
-        except (asyncpg.ConnectionDoesNotExistError, asyncpg.InterfaceError, OSError):
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(min(2 ** attempt, 15))
-            reconnect_db()
+def extract_with_ai(summary: str, client=None) -> dict:
+    """Call Haiku for one summary. Degrades to needs_review on any error."""
+    try:
+        client = client or anthropic.Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
+        resp = client.messages.create(
+            model=MODEL, max_tokens=512,
+            messages=[{"role": "user", "content": _build_prompt(summary)}],
+        )
+        parsed = _parse_ai_json(resp.content[0].text)
+        return _shape_from_ai(parsed) if parsed else _needs_review_shape()
+    except Exception:
+        return _needs_review_shape()
 ```
 
 ## Metrics
 
-- **Warehouse scale:** ~12.2M rows across 111 tables in six schemas (`data_raw` 29, `data_staging` 41, `analytics` 12, plus `reference`, `pipeline`, `agent`).
-- **Core dataset:** `stg_asset_tasks` ~2.6M rows, transformed server-side in ~2–3 minutes, down from ~44 minutes when the same logic ran in Python.
-- **Biggest tables:** `stg_asset_tasks` (2.6M), `raw_timer_activities` (830k), `raw_daily_reports` (674k), `invoice_audit_clean` (609k).
-- **Schema evolution:** ~100 numbered SQL migrations (001 → 098) across the six schemas.
+- **Warehouse scale:** 12.2M+ rows across 111 tables in six schemas.
+- **Core dataset:** the nightly task table is transformed server-side in ~2-3 minutes, down from ~44 minutes when the same logic ran in Python.
+- **Orchestration:** 25 workflow files in `.github/workflows`; about 14 scheduled pipelines by data source. Most are fired by Apps Script time triggers via `repository_dispatch`, 8 have a GitHub cron schedule, and the rest are event chains or manual.
+- **Schema evolution:** 278 numbered SQL migration files (highest number 267).
 
 ## What I Learned
 
 - **Silent truncation bugs hide in the small.** The API never returned an error; it just returned fewer rows than asked. Comparing per-day counts against expectation was the only way to catch it. Validate row counts as a first-class signal, not an afterthought.
 - **Atomicity is a correctness property, not a nicety.** A two-statement clear-then-reload looks fine until the reload times out and you're staring at an empty table in production. Folding the delete into the insert with a data-modifying CTE made the failure mode impossible.
 - **Sync-async bridging is a real pattern, not a hack.** Pure-async rewrites of large sync codebases stall. A pool on a background event loop unlocks async DB access inside sync callers with one helper class.
+- **An audit that requires equality never passes.** Two extraction paths over a live system always differ a little. Naming the allowed classes of difference, and failing on anything else, is what made the shadow run useful.
 
 ## Links
 
-[GitHub repo](https://github.com/Jamil1016/local-pipeline): open-source reference implementation lands W12 of the AI Engineer learning path.
+[Public reference repository](https://github.com/Jamil1016/local-pipeline). The production system runs in a private employer repository; the numbers on this page describe that system.

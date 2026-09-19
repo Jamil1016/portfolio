@@ -1,6 +1,6 @@
 ## The Problem
 
-An org's requirement files, mostly RFDS PDFs, lived behind the Swift Projects REST API, scattered across a deep hierarchy: project → asset → task → asset-task → requirement → file. Pulling them by hand meant clicking through that tree project by project. For a single org that's tens of thousands of asset-tasks to walk and thousands of PDFs to download.
+An org's requirement files, mostly RFDS PDFs, lived behind the vendor's project-management REST API, scattered across a deep hierarchy: project → asset → task → asset-task → requirement → file. Pulling them by hand meant clicking through that tree project by project. For a single org that's tens of thousands of asset-tasks to walk and thousands of PDFs to download.
 
 The job also ran over a residential internet connection for hours at a stretch. Any tool that couldn't survive a mid-run outage and pick up exactly where it left off would force a full restart every time the wifi blinked. So the real constraints were two: walk the API hierarchy fast enough to finish in a sitting, and make a multi-hour, network-fragile run safely resumable.
 
@@ -23,7 +23,7 @@ The orchestrator reads an org's project list from a read-only Postgres table (`s
 
 - **Two thread pools, both IO-bound.** Scanning the hierarchy and streaming bytes are different shapes of waiting-on-the-network. A wide scan pool (32) keeps discovery saturated; a narrower download pool (16) streams files without overwhelming the connection. Neither stage is CPU-bound, so a process pool would only have added serialization overhead.
 - **Resumable checkpointing keyed on real completion.** The orchestrator writes `_progress.json` after every project, and `is_done()` treats only `ok` and `no_atks` as truly complete. `discovery_failed`, `crashed`, and `orchestrator_crash` are all left to retry on the next `--resume`. A four-hour run that loses internet halfway just gets re-invoked with the same command.
-- **Presigned S3 URLs are fetched without the Bearer header.** The Swift file-metadata endpoint returns a presigned S3 URL that already carries auth in its query string. Sending the API's `Authorization` header along to S3 breaks the signature, so downloads go through a plain `requests.get()`, deliberately bypassing the authed client.
+- **Presigned S3 URLs are fetched without the Bearer header.** The vendor's file-metadata endpoint returns a presigned S3 URL that already carries auth in its query string. Sending the API's `Authorization` header along to S3 breaks the signature, so downloads go through a plain `requests.get()`, deliberately bypassing the authed client.
 - **One shared session, hardened against transient failure.** A single `requests.Session` with an `HTTPAdapter` pool of 50 lets all workers reuse TCP/TLS connections. Five-retry exponential backoff covers 502/503/504; a 401 after a long run triggers an automatic re-auth and one retry.
 
 ## Code Samples
@@ -63,7 +63,7 @@ def is_done(self, project_did: str) -> bool:
     return bool(entry) and entry.get("status") in self._DONE_STATUSES
 ```
 
-The argparse gotcha that bit the most: Swift IDs start with `-`, which argparse reads as a flag.
+The argparse gotcha that bit the most: the vendor's IDs start with `-`, which argparse reads as a flag.
 
 ```bash
 # Wrong: argparse treats -LSLn... as an unknown option
@@ -89,4 +89,4 @@ From the first full org run (TSC Construction, 2026-04-28):
 
 ## Links
 
-GitHub repo: the project moved to the work org and is now private. Open-source reference write-up is coming, slated for W7 of the AI Engineer learning path.
+Code is private (employer system). Architecture and decisions are documented here.
