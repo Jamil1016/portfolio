@@ -94,8 +94,16 @@ export const projects: ProjectMeta[] = [
     name: "Workforce Report-Compliance Platform",
     tagline: "Internal platform for daily-report approvals, reminders, management PDFs and extracts, with write-back to the vendor API as each approver",
     stack: ["Next.js 16", "React 19", "TypeScript", "Supabase", "Vercel Cron", "Playwright"],
+    publicRepoUrl: "https://github.com/Jamil1016/drmc-demo",
+    repoLabel: "Public demo repository",
     prod: "production",
-    code: "private",
+    code: "public",
+    screenshots: [
+      { src: "/projects/workforce-compliance-platform/approvals-queue.png", alt: "Approvals queue with wait-time tiers and KPI tiles", caption: "Approvals queue in the live demo (invented data)" },
+      { src: "/projects/workforce-compliance-platform/dr-monitoring.png", alt: "Filing compliance dashboard with backlog aging and daily trends", caption: "DR monitoring: filing compliance, backlog aging and late rate by group" },
+      { src: "/projects/workforce-compliance-platform/hours-analysis.png", alt: "Stated versus timed hours distribution with a breach line", caption: "Hours analysis: stated hours against timer evidence" },
+      { src: "/projects/workforce-compliance-platform/activity-log.png", alt: "Activity log with sign-in and approval charts", caption: "Activity log built on the audit table" },
+    ],
     tags: ["nextjs", "react", "typescript", "supabase", "postgresql", "security", "automation", "pdf", "dashboards"],
   },
   {

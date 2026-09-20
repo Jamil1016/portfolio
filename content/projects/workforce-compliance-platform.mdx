@@ -132,4 +132,6 @@ Facts about the codebase, counted in the repository on 2026-09-19:
 
 ## Links
 
-Code is private (employer system). Architecture and decisions are documented here.
+[Live demo](https://drmc-demo.vercel.app) (click Enter demo; invented data, the vendor API is simulated, resets nightly). Try a bulk approve with the outage simulator: the batch stops part-way, Resume continues from the last committed item, and nothing is approved twice. [Public demo repository](https://github.com/Jamil1016/drmc-demo). The demo is a slice of the platform: home, directory, the approvals queue and grid with durable bulk approve, the approver scorecard, DR monitoring, hours analysis and the activity log. Reminders, the crons, PDF packs, extracts by email and the infraction rules are described above but are not in the demo. The production system runs in a private employer repository.
+
+[Fieldnote](https://fieldnote-five.vercel.app) is a separate clean-room build of the same ideas on a schema I designed from scratch ([repository](https://github.com/Jamil1016/fieldnote)): an approval queue with the same claim-and-resume batch design, an hours-variance heatmap, and reminders logged insert-first so a send can never repeat.
