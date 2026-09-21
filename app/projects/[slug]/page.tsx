@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
 import { getProjectBySlug, projects } from "@/lib/projects";
 import { loadCaseStudy } from "@/lib/content";
 import { CaseStudyLayout } from "@/components/case-study/Layout";
@@ -53,7 +54,11 @@ export default async function ProjectCaseStudy({
       <MDXRemote
         source={source}
         components={mdxComponents}
-        options={{ blockJS: false, blockDangerousJS: true }}
+        options={{
+          blockJS: false,
+          blockDangerousJS: true,
+          mdxOptions: { remarkPlugins: [remarkGfm] },
+        }}
       />
     </CaseStudyLayout>
   );

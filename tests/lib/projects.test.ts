@@ -33,12 +33,12 @@ describe("projects metadata", () => {
 
   it("features the strongest proof first", () => {
     expect(projects.slice(0, 6).map((p) => p.slug)).toEqual([
+      "local-pipeline",
+      "workforce-compliance-platform",
+      "quote-automation",
       "pipeline-guardian",
       "data-analyst-reporting-agent",
-      "quote-automation",
-      "workforce-compliance-platform",
       "event-driven-sync",
-      "local-pipeline",
     ]);
   });
 
