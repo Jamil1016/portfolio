@@ -38,6 +38,8 @@ export type ProjectMeta = {
   metric?: string;
   /** The "30-second version" box at the top of the case study. One sentence each. */
   summary?: CaseSummary;
+  /** Image shown on the home-page featured card (path under /public). */
+  cover?: Screenshot;
   /** Optional screenshots, rendered by the case-study layout when present. */
   screenshots?: Screenshot[];
   tags: string[];
@@ -74,6 +76,7 @@ export const projects: ProjectMeta[] = [
     prod: "production",
     code: "public",
     metric: "12.2M+ rows · 111 tables · about 14 scheduled pipelines",
+    cover: { src: "/projects/local-pipeline/architecture.png", alt: "Architecture: Apps Script triggers → GitHub Actions → extractors → COPY → data_raw → staging → analytics" },
     summary: {
       problem: "A single sequential nightly script took about six hours, timed out, and silently dropped rows past the API's ~1,000-row cap.",
       built: "Async multi-pipeline ETL into Postgres: per-day API chunking, asyncpg binary COPY on a background event loop, atomic clear-and-reload CTEs.",
@@ -97,10 +100,11 @@ export const projects: ProjectMeta[] = [
       { src: "/projects/workforce-compliance-platform/hours-analysis.png", alt: "Stated versus timed hours distribution with a breach line", caption: "Hours analysis: stated hours against timer evidence" },
       { src: "/projects/workforce-compliance-platform/activity-log.png", alt: "Activity log with sign-in and approval charts", caption: "Activity log built on the audit table" },
     ],
+    metric: "Late report filing 44% → 7% · median approval 10 → 6 days, first full month after launch",
     summary: {
       problem: "Leads approved daily reports one at a time in a slow vendor screen; reminders and the weekly picture were manual.",
       built: "Next.js app with durable SKIP LOCKED bulk approvals written back as each approver, database-enforced once-only reminders, and printed PDF packs.",
-      result: "58 weekly per-member PDF packs and 4 crons in production; a bulk approve survives a closed tab.",
+      result: "Late filings fell from 44% to 7% and median approval time from 10 to 6 days in the first full month after launch (122 employees, ~3,700 reports a month).",
       role: "Sole engineer",
     },
     tags: ["nextjs", "react", "typescript", "supabase", "postgresql", "security", "automation", "pdf", "dashboards"],

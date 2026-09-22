@@ -16,7 +16,7 @@ describe("Contact", () => {
 
   it("states availability and hides LinkedIn until a URL is configured", () => {
     render(<Contact />);
-    expect(screen.getByText(/about 20 hours a week/i)).toBeInTheDocument();
+    expect(screen.getByText(/open to full-time, contract and part-time/i)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /linkedin/i })).toBeNull();
   });
 });

@@ -22,7 +22,7 @@ export const LINKEDIN_URL = "";
 export const RESUME_URL = "/resume.pdf";
 
 export const AVAILABILITY =
-  "Open to part-time and project work, about 20 hours a week, remote (UTC+8, evenings and weekends)";
+  "Open to full-time, contract and part-time project work, remote (UTC+8)";
 export const EXPERIENCE_LINE = "5+ years automating manual work";
 
 export type Stat = {

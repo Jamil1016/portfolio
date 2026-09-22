@@ -340,6 +340,13 @@ html { scroll-padding-top: 73px; }
 .home-shell .chips span:nth-child(5n)   { color: var(--acc5); border-color: color-mix(in oklab, var(--acc5) 40%, transparent); }
 
 .home-shell .ledger { border-top: 1px solid var(--rule); }
+.home-shell .ledger-more { margin-top: 8px; }
+.home-shell .ledger-more > summary { cursor: pointer; list-style: none; padding: 14px 0; font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); border-top: 1px solid var(--rule); }
+.home-shell .ledger-more > summary::-webkit-details-marker { display: none; }
+.home-shell .ledger-more > summary::before { content: "+ "; }
+.home-shell .ledger-more[open] > summary::before { content: "– "; }
+.home-shell .ledger-more > summary:hover { color: var(--strong); }
+.home-shell .card.featured .cover { display: block; width: 100%; height: auto; border: 1px solid var(--line); background: var(--panel); margin-top: 6px; }
 .home-shell .ledger-row {
   display: grid; grid-template-columns: 1.2fr 1.6fr auto; align-items: baseline; gap: 24px;
   padding: 15px 0; border-bottom: 1px solid var(--line); text-decoration: none;
@@ -441,6 +448,9 @@ html { scroll-padding-top: 73px; }
   padding: 24px 0; border-bottom: 1px solid var(--line);
 }
 .home-shell .approach-row .ap-n { font-family: var(--font-mono), monospace; font-size: 12px; letter-spacing: 0.18em; color: var(--faint); }
+.home-shell .ap-proof { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.home-shell .ap-proof a { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--dim); text-decoration: none; }
+.home-shell .ap-proof a:hover { color: var(--strong); text-decoration: underline; text-underline-offset: 4px; }
 .home-shell .approach-row .ap-body h3 { font-family: var(--font-serif), serif; font-weight: 400; font-size: 26px; line-height: 1.1; margin: 0 0 7px; color: var(--strong); }
 .home-shell .approach-row .ap-body p { margin: 0; color: var(--dim); font-size: 15px; line-height: 1.6; max-width: 640px; }
 
