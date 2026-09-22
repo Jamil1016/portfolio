@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { projects, getProjectBySlug, PRODUCTION_COUNT } from "@/lib/projects";
+import { projects, getProjectBySlug, PRODUCTION_COUNT, getNeighbours } from "@/lib/projects";
 import { STATS } from "@/lib/site-data";
 import { isValidTag } from "@/lib/tags";
 
@@ -78,5 +78,26 @@ describe("projects metadata", () => {
     for (const p of projects) {
       expect(new Set(p.tags).size).toBe(p.tags.length);
     }
+  });
+});
+
+describe("case-study summaries", () => {
+  it("every project has a four-line summary with no commit counts", () => {
+    for (const p of projects) {
+      expect(p.summary, p.slug).toBeDefined();
+      const s = p.summary!;
+      for (const line of [s.problem, s.built, s.result, s.role]) {
+        expect(line.trim().length, p.slug).toBeGreaterThan(0);
+        expect(line, p.slug).not.toMatch(/\d[\d,+]*\s+(solo\s+)?commits?\b/i);
+      }
+    }
+  });
+
+  it("wraps neighbours at both ends of the catalog", () => {
+    const first = projects[0].slug;
+    const last = projects[projects.length - 1].slug;
+    expect(getNeighbours(first)?.prev.slug).toBe(last);
+    expect(getNeighbours(last)?.next.slug).toBe(first);
+    expect(getNeighbours("nope")).toBeNull();
   });
 });

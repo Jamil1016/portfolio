@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
-import { getProjectBySlug, projects } from "@/lib/projects";
+import rehypeSlug from "rehype-slug";
+import remarkDecisions from "@/lib/remark-decisions";
+import { extractHeadings } from "@/lib/toc";
+import { getNeighbours, getProjectBySlug, projects } from "@/lib/projects";
 import { loadCaseStudy } from "@/lib/content";
 import { CaseStudyLayout } from "@/components/case-study/Layout";
 import { MermaidDiagram } from "@/components/case-study/MermaidDiagram";
@@ -46,8 +49,11 @@ export default async function ProjectCaseStudy({
   const source = await loadCaseStudy(slug);
   if (!source) notFound();
 
+  const headings = extractHeadings(source);
+  const neighbours = getNeighbours(slug) ?? undefined;
+
   return (
-    <CaseStudyLayout project={project}>
+    <CaseStudyLayout project={project} headings={headings} neighbours={neighbours}>
       {/* blockJS defaults to true in next-mdx-remote 6 and strips the template
           literal that carries each diagram's source. The MDX is first-party
           (content/projects), and blockDangerousJS stays on. */}
@@ -57,7 +63,7 @@ export default async function ProjectCaseStudy({
         options={{
           blockJS: false,
           blockDangerousJS: true,
-          mdxOptions: { remarkPlugins: [remarkGfm] },
+          mdxOptions: { remarkPlugins: [remarkGfm, remarkDecisions], rehypePlugins: [rehypeSlug] },
         }}
       />
     </CaseStudyLayout>

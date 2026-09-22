@@ -42,6 +42,7 @@ export function MermaidDiagram({ children: raw }: { children?: string }) {
   const counter = useRef(0);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +59,9 @@ export function MermaidDiagram({ children: raw }: { children?: string }) {
             startOnLoad: false,
             theme: "base",
             themeVariables: themeVars(theme),
+            // Tighter ranks keep wide LR graphs narrower, so they scale up
+            // larger inside the article column and labels stay legible.
+            flowchart: { nodeSpacing: 28, rankSpacing: 36, padding: 8 },
           });
           return mermaid.render(`${base}-${counter.current++}`, children.trim());
         })
@@ -108,5 +112,32 @@ export function MermaidDiagram({ children: raw }: { children?: string }) {
       </div>
     );
   }
-  return <div className="cs-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return (
+    <>
+      <button
+        type="button"
+        className="cs-diagram cs-diagram--zoom"
+        aria-label="Open diagram at full size"
+        title="Open at full size"
+        onClick={() => dialogRef.current?.showModal()}
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      <dialog
+        ref={dialogRef}
+        className="cs-diagram-dialog"
+        onClick={(e) => {
+          // Backdrop click closes; clicks on the drawing itself do not.
+          if (e.target === dialogRef.current) dialogRef.current.close();
+        }}
+      >
+        <div className="cs-diagram-dialog-bar">
+          <span>Diagram · full size · Esc to close</span>
+          <button type="button" onClick={() => dialogRef.current?.close()}>
+            Close
+          </button>
+        </div>
+        <div className="cs-diagram-dialog-body" dangerouslySetInnerHTML={{ __html: svg }} />
+      </dialog>
+    </>
+  );
 }
