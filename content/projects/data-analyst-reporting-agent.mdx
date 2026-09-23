@@ -117,13 +117,15 @@ GRANT  EXECUTE ON FUNCTION agent.execute_user_query(text) TO authenticated, serv
 
 ## Metrics
 
-These are the verifiable facts about the system, not performance claims:
+These are the verifiable facts about the work prototype (TypeScript/Next.js), not performance claims:
 
 - **37 defined metrics across 6 domains**: 10 in the V1 seed, 27 more added in Phase-2 migrations (workforce, field ops, finance, quality, compliance, packages), each with a canonical SQL formula, synonyms, caveats, and source views.
 - **22-case SQL-guardrail test suite** (`scripts/test-guardrails.ts`) covers happy-path SELECT/WITH/subquery/alias cases plus rejections for DROP/INSERT/UPDATE/DELETE/TRUNCATE/SET, multiple statements, six denied schemas, `pg_sleep`, and `WITH … DELETE`.
 - **896-row semantic layer** of per-column metadata (`agent.schema_metadata`) backing `describe_view`.
 - **Bounded execution**: agent loop capped at 8 iterations; queries forced to `LIMIT 1000` and a 30s statement timeout.
 - **Per-turn observability**: model, tokens (incl. cache read/creation), cost in USD, latency, rendered SQL, and row count logged to `agent.query_audit_log` on every question.
+
+The [public reference build](https://github.com/Jamil1016/cca-capstone) is a separate Python implementation of the same design, written for the Claude Certified Architect capstone. It carries its own suite, which runs in CI: **316 offline tests** (no network, no Docker), **177** of them SQL-guard cases across two dialects, covering DROP, UPDATE, multi-statement input, CTE-wrapped DML, CTE name shadowing, comment tricks, non-allowlisted and schema-qualified tables, file and sleep functions, and `LIMIT` injection and clamping. Those numbers belong to that repository, not to the prototype above: the two share the design, not the code.
 
 ## What I Learned
 

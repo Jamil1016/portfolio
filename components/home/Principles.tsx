@@ -27,7 +27,7 @@ const PRINCIPLES: { n: string; title: string; body: string; proof: Proof[] }[] =
     body: "I keep a structured roadmap, but a course isn't done until the idea lands in a production system: evals, safety rails, and observability included.",
     proof: [
       { text: "Workforce platform: 143 test files; late filings 44% → 7% in the first month", slug: "workforce-compliance-platform" },
-      { text: "DARA: SQL guardrail with a 22-case suite and row-level security", slug: "data-analyst-reporting-agent" },
+      { text: "DARA: row-level security, and 177 SQL-guard cases in the public reference build", slug: "data-analyst-reporting-agent" },
     ],
   },
 ];
